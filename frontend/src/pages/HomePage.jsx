@@ -1,0 +1,2 @@
+import PageShell from '../components/PageShell.jsx';
+export default function HomePage() { return <PageShell title="Estrutura do SICA" description="Rotas iniciais para desenvolvimento visual por perfil. Não há operações reais nesta etapa." links={[{to:'/totem',label:'Totem'},{to:'/acompanhar/demo',label:'Acompanhamento (demonstração)'},{to:'/atendente',label:'Atendente'},{to:'/medico',label:'Médico'},{to:'/admin',label:'Administrador'},{to:'/tv',label:'Painel de TV'},{to:'/login',label:'Login'}]} />; }
