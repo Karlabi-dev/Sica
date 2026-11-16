@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { checkDatabase, closeDatabase } from "./config/database.js";
+import { staffAuth } from "./auth/firebaseAdmin.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -40,6 +41,11 @@ app.get("/ready", async (_req, res) => {
     });
     res.status(503).json({ status: "unavailable" });
   }
+});
+
+app.get("/auth/me", staffAuth, (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.status(200).json(req.staff);
 });
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
