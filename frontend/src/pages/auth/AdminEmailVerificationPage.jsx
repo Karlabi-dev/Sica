@@ -61,8 +61,11 @@ export default function AdminEmailVerificationPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Código inválido ou expirado.");
+      if (!data.token) throw new Error("Sessão administrativa não recebida.");
+      sessionStorage.setItem("sica_admin_session", data.token);
       setVerified(true); setCode("");
-      setMessage("Código de e-mail confirmado! Esta etapa é apenas um teste: o acesso ao painel continua exigindo a MFA do Firebase.");
+      navigate("/admin", { replace: true });
+
     } catch (error) { setMessage(error.message); }
     finally { setBusy(false); }
   }
@@ -72,7 +75,7 @@ export default function AdminEmailVerificationPage() {
   return <main className="admin-otp-page"><section className="admin-otp-card">
     <div className="admin-otp-brand">SICA <span>· Segurança</span></div>
     <h1>Verificação por e-mail</h1>
-    <p>Teste de envio e validação do código para o administrador. O painel administrativo ainda não será desbloqueado.</p>
+    <p>Digite o código enviado ao seu e-mail para entrar no painel administrativo.</p>
     <p className="admin-otp-address">Conta autenticada: <strong>{user.email}</strong></p>
     <p className="admin-otp-address">E-mail verificado no Firebase: <strong>{user.emailVerified ? "Sim" : "Não"}</strong></p>
     {!user.emailVerified && <div className="admin-otp-confirm"><p>Confirme seu endereço antes de solicitar o código administrativo.</p><button type="button" onClick={sendVerification} disabled={sendingVerification}>{sendingVerification ? "Enviando..." : "Enviar link de confirmação"}</button><button type="button" onClick={refreshVerification}>Atualizar verificação</button></div>}
@@ -83,7 +86,7 @@ export default function AdminEmailVerificationPage() {
       <button className="admin-otp-primary" disabled={busy || code.length !== 6} type="submit">Verificar código</button>
     </form>}
     {message && <p className={verified ? "admin-otp-success" : "admin-otp-message"} role="status">{message}</p>}
-    <p className="admin-otp-note">A opção “Confiar neste dispositivo” será adicionada somente quando houver validação segura no backend.</p>
-    <button className="admin-otp-exit" onClick={async()=>{await signOut(auth);navigate("/login",{replace:true});}}>Sair e voltar ao login</button>
+    <p className="admin-otp-note">Esta sessão dura até 12 horas. A opção de confiar neste dispositivo será implementada separadamente.</p>
+    <button className="admin-otp-exit" onClick={async()=>{sessionStorage.removeItem("sica_admin_session");await signOut(auth);navigate("/login",{replace:true});}}>Sair e voltar ao login</button>
   </section></main>;
 }
