@@ -46,7 +46,10 @@ export async function staffAuth(req, res, next) {
     req.staff = { id: staff.id, displayName: staff.display_name, role: staff.role };
     return next();
   } catch (error) {
-    console.error("Staff authorization query failed", { code: error.code ?? "UNKNOWN" });
+    console.error("Firebase token verification failed", {
+  code: error.code ?? "UNKNOWN",
+  message: error.message,
+});
     return res.status(503).json({ error: "Authorization service unavailable" });
   }
 }
