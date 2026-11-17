@@ -14,7 +14,7 @@ function firebaseAuth() {
  return getAuth();
 }
 async function adminFromToken(req) {
- const match = /^Bearer ([^\\s]+)$/.exec(req.get("authorization") ?? "");
+ const match = /^Bearer ([^\s]+)$/.exec(req.get("authorization") ?? "");
  if (!match) return null;
  const decoded = await firebaseAuth().verifyIdToken(match[1], true);
  const { rows } = await getPool().query("SELECT id, email FROM public.staff_users WHERE firebase_uid=$1 AND role='admin' AND active=true AND mfa_required=true", [decoded.uid]);
@@ -42,7 +42,7 @@ export async function requestAdminEmailCode(req, res) {
   const codeHash = hashCode(id, code);
   await pool.query("INSERT INTO public.admin_email_challenges(id,staff_user_id,code_hash,expires_at) VALUES ($1,$2,$3,now() + interval '5 minutes')", [id, admin.id, codeHash]);
   try {
-   await transporter().sendMail({ from: process.env.SMTP_FROM, to: admin.email, subject: "SICA — código de verificação", text: "Seu código de verificação SICA é: " + code + "\\nEle expira em 5 minutos. Se você não solicitou, ignore esta mensagem." });
+   await transporter().sendMail({ from: process.env.SMTP_FROM, to: admin.email, subject: "SICA — código de verificação", text: "Seu código de verificação SICA é: " + code + "\nEle expira em 5 minutos. Se você não solicitou, ignore esta mensagem." });
   } catch (error) {
    await pool.query("DELETE FROM public.admin_email_challenges WHERE id=$1", [id]);
    throw error;
@@ -59,7 +59,7 @@ export async function verifyAdminEmailCode(req, res) {
  try { admin = await adminFromToken(req); } catch { return res.status(401).json({ error: "Invalid authentication" }); }
  if (!admin) return res.status(403).json({ error: "Administrator account or verified email required" });
  const { challengeId, code } = req.body ?? {};
- if (typeof challengeId !== "string" || !/^[0-9a-f-]{36}$/i.test(challengeId) || typeof code !== "string" || !/^\\d{6}$/.test(code)) return res.status(400).json({ error: "Invalid verification input" });
+ if (typeof challengeId !== "string" || !/^[0-9a-f-]{36}$/i.test(challengeId) || typeof code !== "string" || !/^\d{6}$/.test(code)) return res.status(400).json({ error: "Invalid verification input" });
  const client = await getPool().connect();
  try {
   await client.query("BEGIN");
