@@ -61,3 +61,5 @@
 .tracking-page--font-1 .tracking-finish-card span,.tracking-page--font-2 .tracking-finish-card span,.tracking-page--font-1 .tracking-thanks-card p,.tracking-page--font-2 .tracking-thanks-card p{font-size:.94em}
 .tracking-page--font-1 .tracking-number,.tracking-page--font-2 .tracking-number{font-size:clamp(4rem,15vw,5.2rem)}
 @media(max-width:359px){.tracking-accessible-header{padding-left:12px;padding-right:12px}.tracking-accessible-header .tracking-brand small{font-size:.53rem}.tracking-font-controls button{min-width:40px}}
+
+.tracking-call-timer{margin:4px 0 20px;padding:20px 16px;border-radius:10px;background:#e8f5fc;text-align:center;border:1px solid #d3e9f5}.tracking-call-timer>span{display:block;font-size:.8em;color:#427e9b;font-weight:800;letter-spacing:.06em}.tracking-call-timer>strong{display:block;font-size:2.5em;color:#155282;font-variant-numeric:tabular-nums;letter-spacing:.03em;margin:10px 0}.tracking-call-timer p{font-size:.94em;line-height:1.5;color:#557f96;margin:0}.tracking-call-timer--expired{background:#fff4ed;border-color:#f1dacb}.tracking-call-timer--expired>strong{color:#aa572d}
