@@ -31,6 +31,10 @@ export default function LoginPage() {
         cache: "no-store",
       });
       if (!response.ok) {
+        if (response.status === 403) {
+          navigate("/admin/verificar-email", { replace: true });
+          return;
+        }
         await signOut(auth);
         setMessage(response.status === 403
           ? "Conta sem autorização para acessar o SICA ou com MFA pendente."
