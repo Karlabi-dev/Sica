@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import "./AdminLayout.css";
 
@@ -19,6 +20,7 @@ export const ADMIN_MENU = [
 
 export default function AdminLayout() {
   const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
   const current = ADMIN_MENU.find(item => item.to === location.pathname);
   return <div className="sica-admin">
     <aside className="sica-admin-sidebar">
@@ -29,7 +31,7 @@ export default function AdminLayout() {
     </aside>
     <div className="sica-admin-content">
       <header className="sica-admin-topbar"><div><span className="sica-admin-breadcrumb">Administração / {current?.label ?? "SICA"}</span></div><div className="sica-admin-top-user"><span className="sica-admin-demo-label">AMBIENTE DE DEMONSTRAÇÃO</span><span className="sica-admin-user-icon">AD</span></div></header>
-      <div className="sica-admin-mobile-nav"><nav aria-label="Menu administrativo móvel">{ADMIN_MENU.map(item => <NavLink key={item.to} to={item.to} end={item.end}>{item.label}</NavLink>)}</nav></div>
+      <div className="sica-admin-mobile-nav"><button type="button" className="sica-admin-menu-toggle" aria-expanded={menuOpen} aria-controls="sica-admin-mobile-links" onClick={() => setMenuOpen(open => !open)}><span aria-hidden="true">{menuOpen ? "✕" : "☰"}</span> {menuOpen ? "Fechar menu" : "Menu administrativo"}</button><nav id="sica-admin-mobile-links" className={menuOpen ? "is-open" : ""} aria-label="Menu administrativo móvel">{ADMIN_MENU.map(item => <NavLink key={item.to} to={item.to} end={item.end} onClick={() => setMenuOpen(false)}>{item.label}</NavLink>)}</nav></div>
       <Outlet />
     </div>
   </div>;
