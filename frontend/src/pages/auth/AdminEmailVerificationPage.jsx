@@ -37,7 +37,7 @@ export default function AdminEmailVerificationPage() {
   async function requestCode() {
     setBusy(true); setMessage(""); setVerified(false); setChallengeId(""); setCode("");
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(true);
       const response = await fetch(`${API}/auth/admin/email-code/request`, {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: "{}", cache: "no-store",
       });
@@ -54,7 +54,7 @@ export default function AdminEmailVerificationPage() {
     if (!/^\d{6}$/.test(code)) { setMessage("Digite os 6 números do código."); return; }
     setBusy(true); setMessage("");
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(true);
       const response = await fetch(`${API}/auth/admin/email-code/verify`, {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ challengeId, code }), cache: "no-store",
