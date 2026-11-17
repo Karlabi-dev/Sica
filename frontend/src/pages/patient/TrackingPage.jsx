@@ -20,6 +20,7 @@ export default function TrackingPage() {
   const [params, setParams] = useSearchParams();
   const initial = STAGES.includes(params.get('estado')) ? params.get('estado') : 'recepcao-aguardando';
   const [stage, setStage] = useState(initial);
+  const [fontLevel, setFontLevel] = useState(0);
   const number = useMemo(() => {
     const candidate = (token || '').toUpperCase();
     return /^(C|CP|P|PP)\d{1,4}$/.test(candidate) ? candidate : 'C024';
@@ -33,9 +34,15 @@ export default function TrackingPage() {
     setParams({ estado: next }, { replace: true });
   }
 
-  return <div className="tracking-page">
+  return <div className={`tracking-page tracking-page--font-${fontLevel}`}>
     <div className="tracking-shell">
-      <Brand />
+      <header className="tracking-accessible-header">
+        <Brand />
+        <div className="tracking-font-controls" role="group" aria-label="Tamanho do texto">
+          <button type="button" onClick={() => setFontLevel(level => Math.max(0, level - 1))} disabled={fontLevel === 0} aria-label="Diminuir tamanho do texto">A−</button>
+          <button type="button" onClick={() => setFontLevel(level => Math.min(2, level + 1))} disabled={fontLevel === 2} aria-label="Aumentar tamanho do texto">A+</button>
+        </div>
+      </header>
       <main className="tracking-main">
         {config ? <>
           <p className="tracking-eyebrow">{config.eyebrow}</p>
