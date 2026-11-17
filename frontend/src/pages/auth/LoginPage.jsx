@@ -23,6 +23,7 @@ export default function LoginPage() {
     event.preventDefault();
     setBusy(true);
     setMessage("");
+    sessionStorage.removeItem("sica_admin_session");
     try {
       const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const token = await credential.user.getIdToken();
