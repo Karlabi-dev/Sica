@@ -16,7 +16,7 @@ export default function StaffGuard({ roles }) {
       try {
         const token = await user.getIdToken();
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001"}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}`, "X-Admin-Session": sessionStorage.getItem("sica_admin_session") ?? "" },
           cache: "no-store",
         });
         if (!response.ok) throw new Error("Access denied");
