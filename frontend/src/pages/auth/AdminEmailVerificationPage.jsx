@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged, sendEmailVerification, signOut } from "firebase/auth";
 import { Link, useNavigate } from "react-router-dom";
 import { auth } from "../../services/firebase.js";
 import "./AdminEmailVerificationPage.css";
@@ -14,8 +14,25 @@ export default function AdminEmailVerificationPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [verified, setVerified] = useState(false);
+  const [sendingVerification, setSendingVerification] = useState(false);
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
+
+  async function sendVerification() {
+    setSendingVerification(true); setMessage("");
+    try {
+      await sendEmailVerification(user);
+      setMessage("Enviamos um link de confirmação. Abra seu e-mail, confirme o endereço e depois clique em Atualizar verificação.");
+    } catch (error) {
+      setMessage(error.code === "auth/too-many-requests" ? "Muitas tentativas. Aguarde antes de tentar novamente." : `Não foi possível enviar a confirmação: ${error.code || error.message}`);
+    } finally { setSendingVerification(false); }
+  }
+
+  async function refreshVerification() {
+    setMessage("");
+    try { await user.reload(); setUser(auth.currentUser); setMessage(auth.currentUser?.emailVerified ? "E-mail confirmado no Firebase. Agora solicite o código." : "O Firebase ainda não confirmou o e-mail. Abra o link recebido antes de atualizar."); }
+    catch (error) { setMessage(`Falha ao atualizar: ${error.code || error.message}`); }
+  }
 
   async function requestCode() {
     setBusy(true); setMessage(""); setVerified(false); setChallengeId(""); setCode("");
@@ -57,7 +74,9 @@ export default function AdminEmailVerificationPage() {
     <h1>Verificação por e-mail</h1>
     <p>Teste de envio e validação do código para o administrador. O painel administrativo ainda não será desbloqueado.</p>
     <p className="admin-otp-address">Conta autenticada: <strong>{user.email}</strong></p>
-    <button type="button" onClick={requestCode} disabled={busy} className="admin-otp-primary">{busy ? "Aguarde..." : challengeId ? "Solicitar novo código" : "Enviar código para meu e-mail"}</button>
+    <p className="admin-otp-address">E-mail verificado no Firebase: <strong>{user.emailVerified ? "Sim" : "Não"}</strong></p>
+    {!user.emailVerified && <div className="admin-otp-confirm"><p>Confirme seu endereço antes de solicitar o código administrativo.</p><button type="button" onClick={sendVerification} disabled={sendingVerification}>{sendingVerification ? "Enviando..." : "Enviar link de confirmação"}</button><button type="button" onClick={refreshVerification}>Atualizar verificação</button></div>}
+    <button type="button" onClick={requestCode} disabled={busy || !user.emailVerified} className="admin-otp-primary">{busy ? "Aguarde..." : challengeId ? "Solicitar novo código" : "Enviar código para meu e-mail"}</button>
     {challengeId && !verified && <form onSubmit={verifyCode}>
       <label htmlFor="admin-otp-code">Código de 6 dígitos</label>
       <input id="admin-otp-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,6))} placeholder="000000" required />
