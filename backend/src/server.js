@@ -4,6 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { checkDatabase, closeDatabase } from "./config/database.js";
 import { staffAuth } from "./auth/firebaseAdmin.js";
+import { revokeAdminSession } from "./auth/adminEmailSession.js";
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
 
 const app = express();
@@ -46,6 +47,12 @@ app.get("/ready", async (_req, res) => {
 
 app.post("/auth/admin/email-code/request", requestAdminEmailCode);
 app.post("/auth/admin/email-code/verify", verifyAdminEmailCode);
+
+app.post("/auth/admin/logout", staffAuth, async (req, res) => {
+  if (req.staff.role !== "admin") return res.status(403).json({ error: "Forbidden" });
+  await revokeAdminSession(req.staff.id, req.adminSessionToken);
+  return res.status(204).end();
+});
 
 app.get("/auth/me", staffAuth, (req, res) => {
   res.set("Cache-Control", "no-store");
