@@ -32,3 +32,32 @@
 .tracking-demo>span{font-size:.82rem}
 @media(min-width:600px){.tracking-page{padding:28px 20px 40px}.tracking-shell{min-height:760px;border-radius:16px;overflow:hidden}.tracking-main{padding-top:40px}}
 @media(max-width:359px){.tracking-header,.tracking-main{padding-left:18px;padding-right:18px}.tracking-stats{gap:8px}.tracking-stats>div+div{padding-left:12px}}
+
+/* Accessible patient text sizing: normal, large (+20%), extra-large (+40%). */
+.tracking-accessible-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:20px clamp(16px,4vw,24px);border-bottom:1px solid #e7eff2}
+.tracking-accessible-header .tracking-header{padding:0;border:0;min-width:0}
+.tracking-accessible-header .tracking-brand{gap:8px}
+.tracking-accessible-header .tracking-brand small{max-width:180px}
+.tracking-font-controls{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.tracking-font-controls button{min-width:43px;min-height:44px;padding:8px 7px;border:1px solid #c9dfe5;border-radius:8px;background:#fff;color:#155282;font-size:1rem;font-weight:800;cursor:pointer}
+.tracking-font-controls button:hover:not(:disabled),.tracking-font-controls button:focus-visible{background:#eaf8f5;outline:2px solid #218b9d;outline-offset:1px}
+.tracking-font-controls button:disabled{opacity:.4;cursor:not-allowed}
+.tracking-page--font-1 .tracking-main{font-size:1.2rem}
+.tracking-page--font-2 .tracking-main{font-size:1.4rem}
+.tracking-page--font-1 .tracking-main h1{font-size:2.15em}
+.tracking-page--font-2 .tracking-main h1{font-size:2.15em}
+.tracking-page--font-1 .tracking-eyebrow,.tracking-page--font-1 .tracking-ticket-label,.tracking-page--font-1 .tracking-field-label{font-size:.94em}
+.tracking-page--font-2 .tracking-eyebrow,.tracking-page--font-2 .tracking-ticket-label,.tracking-page--font-2 .tracking-field-label{font-size:.94em}
+.tracking-page--font-1 .tracking-status,.tracking-page--font-2 .tracking-status{font-size:.95em;min-width:0;max-width:100%;text-align:center}
+.tracking-page--font-1 .tracking-details h2,.tracking-page--font-2 .tracking-details h2{font-size:1.35em}
+.tracking-page--font-1 .tracking-stats span,.tracking-page--font-2 .tracking-stats span,.tracking-page--font-1 .tracking-next span,.tracking-page--font-2 .tracking-next span{font-size:.9em}
+.tracking-page--font-1 .tracking-stats strong,.tracking-page--font-2 .tracking-stats strong{font-size:1.7em}
+.tracking-page--font-1 .tracking-next strong,.tracking-page--font-2 .tracking-next strong{font-size:1em}
+.tracking-page--font-1 .tracking-notice strong,.tracking-page--font-2 .tracking-notice strong{font-size:1em}
+.tracking-page--font-1 .tracking-notice p,.tracking-page--font-2 .tracking-notice p{font-size:.94em}
+.tracking-page--font-1 .tracking-finish-pill,.tracking-page--font-2 .tracking-finish-pill{font-size:.85em}
+.tracking-page--font-1 .tracking-finish>p,.tracking-page--font-2 .tracking-finish>p{font-size:1em}
+.tracking-page--font-1 .tracking-finish-card strong,.tracking-page--font-2 .tracking-finish-card strong,.tracking-page--font-1 .tracking-thanks-card strong,.tracking-page--font-2 .tracking-thanks-card strong{font-size:1em}
+.tracking-page--font-1 .tracking-finish-card span,.tracking-page--font-2 .tracking-finish-card span,.tracking-page--font-1 .tracking-thanks-card p,.tracking-page--font-2 .tracking-thanks-card p{font-size:.94em}
+.tracking-page--font-1 .tracking-number,.tracking-page--font-2 .tracking-number{font-size:clamp(4rem,15vw,5.2rem)}
+@media(max-width:359px){.tracking-accessible-header{padding-left:12px;padding-right:12px}.tracking-accessible-header .tracking-brand small{font-size:.53rem}.tracking-font-controls button{min-width:40px}}
