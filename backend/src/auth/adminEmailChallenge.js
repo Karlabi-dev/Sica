@@ -2,6 +2,7 @@ import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto"
 import { getAuth } from "firebase-admin/auth";
 import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import nodemailer from "nodemailer";
+import { issueAdminSession } from "./adminEmailSession.js";
 import { getPool } from "../config/database.js";
 
 function hashCode(id, code) {
@@ -75,8 +76,8 @@ export async function verifyAdminEmailCode(req, res) {
   await client.query("UPDATE public.admin_email_challenges SET attempts=attempts+1,consumed_at=CASE WHEN $2 THEN now() ELSE consumed_at END WHERE id=$1", [challengeId,valid]);
   await client.query("COMMIT");
   if (!valid) return res.status(400).json({ error: "Invalid or expired code" });
-  // Deliberately do not issue an access token or bypass Firebase's existing MFA requirement.
-  return res.status(200).json({ verified: true, message: "Email code verified. Administrative access still requires Firebase MFA." });
+  const session = await issueAdminSession(admin.id);
+  return res.status(200).json({ verified: true, ...session });
  } catch (error) {
   await client.query("ROLLBACK").catch(()=>{});
   console.error("Admin OTP verification failed", { code: error.code ?? "UNKNOWN" });
