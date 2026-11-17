@@ -1,6 +1,7 @@
 import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getPool } from "../config/database.js";
+import { validAdminSession } from "./adminEmailSession.js";
 function adminAuth() {
   if (!getApps().length) {
     const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -57,11 +58,15 @@ export async function staffAuth(req, res, next) {
       });
     }
     const secondFactor = decoded.firebase?.sign_in_second_factor;
-    if ((staff.role === "admin" || staff.mfa_required) && !secondFactor) {
+    const emailSession = staff.role === "admin" && !secondFactor
+      ? await validAdminSession(staff.id, req.get("x-admin-session"))
+      : false;
+    if ((staff.role === "admin" || staff.mfa_required) && !secondFactor && !emailSession) {
       return res.status(403).json({
         error: "Multi-factor authentication required",
       });
     }
+    req.adminSessionToken = emailSession ? req.get("x-admin-session") : null;
     req.staff = {
       id: staff.id,
       displayName: staff.display_name,
