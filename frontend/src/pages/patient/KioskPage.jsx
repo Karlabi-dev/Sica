@@ -23,7 +23,7 @@ function KioskHeader() {
 export default function KioskPage() {
   const [step, setStep] = useState('choose');
   const [choice, setChoice] = useState(null);
-  const trackingUrl = typeof window === 'undefined' ? '/acompanhar/demo' : new URL('/acompanhar/demo', window.location.origin).href;
+  const trackingUrl = typeof window === 'undefined' ? '/acompanhar/demo' : new URL('/acompanhar/' + (choice?.demo || 'C024'), window.location.origin).href;
 
   function selectOption(option) {
     setChoice(option);
