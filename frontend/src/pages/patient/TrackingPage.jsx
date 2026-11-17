@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { CALL_TIMEOUT_MS, formatRemaining, useClock, useMedicalCall } from '../../services/medicalCallDemo.js';
 import { useParams, useSearchParams } from 'react-router-dom';
 import './TrackingPage.css';
 
@@ -27,6 +28,15 @@ export default function TrackingPage() {
   }, [token]);
   const type = number.startsWith('CP') || number.startsWith('PP') ? 'Prioritário' : 'Convencional';
   const config = CONFIG[stage];
+  const call = useMedicalCall();
+  const now = useClock();
+  const activeCall = call?.ticket === number ? call : null;
+  const sharedCalled = activeCall?.status === 'called' && stage !== 'encerrado' && stage !== 'agradecimento';
+  const sharedFinished = activeCall?.status === 'finished' && stage !== 'agradecimento';
+  const sharedArrived = activeCall?.status === 'arrived' && stage !== 'encerrado' && stage !== 'agradecimento';
+  const remaining = sharedCalled ? Math.max(0, activeCall.startedAt + CALL_TIMEOUT_MS - now) : 0;
+  const effectiveStage = sharedFinished ? 'encerrado' : sharedCalled ? 'consulta-chamado' : sharedArrived ? 'consulta-aguardando' : stage;
+  const displayConfig = CONFIG[effectiveStage];
 
   function changeStage(event) {
     const next = event.target.value;
@@ -44,22 +54,24 @@ export default function TrackingPage() {
         </div>
       </header>
       <main className="tracking-main">
-        {config ? <>
-          <p className="tracking-eyebrow">{config.eyebrow}</p>
-          <h1>{config.title}</h1>
+        {displayConfig ? <>
+          <p className="tracking-eyebrow">{displayConfig.eyebrow}</p>
+          <h1>{sharedCalled && remaining === 0 ? 'Aguardando decisão do médico' : sharedArrived ? 'Você chegou ao consultório' : displayConfig.title}</h1>
           <section className="tracking-ticket" aria-label="Sua senha">
             <span className="tracking-ticket-label">SUA SENHA</span>
             <strong className="tracking-number">{number}</strong>
-            <span className={`tracking-status tracking-status--${config.kind}`}><span aria-hidden="true">●</span>{config.status}</span>
+            <span className={`tracking-status tracking-status--${displayConfig.kind}`}><span aria-hidden="true">●</span>{displayConfig.status}</span>
           </section>
           <section className="tracking-details" aria-label="Informações do atendimento">
             <p className="tracking-field-label">SUA ETAPA</p>
-            <h2>{config.place}</h2>
-            <div className="tracking-stats"><div><span>Pessoas à frente</span><strong>{config.ahead}</strong></div><div><span>Tempo estimado</span><strong>{config.estimate}</strong></div></div>
-            <div className="tracking-next"><span>Próxima chamada</span><strong>{config.estimate === 'Agora' ? 'Agora' : 'Em breve'}</strong></div>
+            <h2>{displayConfig.place}</h2>
+            <div className="tracking-stats"><div><span>Pessoas à frente</span><strong>{displayConfig.ahead}</strong></div><div><span>Tempo estimado</span><strong>{displayConfig.estimate}</strong></div></div>
+            <div className="tracking-next"><span>Próxima chamada</span><strong>{displayConfig.estimate === 'Agora' ? 'Agora' : 'Em breve'}</strong></div>
           </section>
-          <aside className={`tracking-notice tracking-notice--${config.kind}`}><strong>{config.noteTitle}</strong><p>{config.note}</p></aside>
-        </> : stage === 'encerrado' ? <section className="tracking-finish">
+          {sharedCalled && <section className={`tracking-call-timer ${remaining === 0 ? 'tracking-call-timer--expired' : ''}`} aria-label="Tempo para chegar ao consultório"><span>{remaining === 0 ? 'TEMPO ESGOTADO' : 'TEMPO PARA CHEGAR AO CONSULTÓRIO'}</span><strong role="timer" aria-live="off">{formatRemaining(remaining)}</strong><p>{remaining === 0 ? 'Aguardando o médico decidir se encerra o atendimento. Permaneça atento às orientações.' : 'Você tem 2 minutos para ir ao consultório. Se não chegar a tempo, o médico poderá encerrar sua chamada.'}</p></section>}
+          {sharedArrived && <aside className="tracking-notice tracking-notice--waiting"><strong>Chegada confirmada</strong><p>Você já está no consultório. Aguarde as orientações do médico.</p></aside>}
+          {!sharedCalled && !sharedArrived && <aside className={`tracking-notice tracking-notice--${displayConfig.kind}`}><strong>{displayConfig.noteTitle}</strong><p>{displayConfig.note}</p></aside>}
+        </> : effectiveStage === 'encerrado' ? <section className="tracking-finish">
           <span className="tracking-finish-pill">✓ Atendimento concluído</span>
           <h1>Atendimento<br />encerrado</h1>
           <strong className="tracking-finish-number">{number}</strong>
