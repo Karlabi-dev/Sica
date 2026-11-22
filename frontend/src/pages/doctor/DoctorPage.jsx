@@ -1,69 +1,53 @@
-import { useState } from "react";
-import { CALL_TIMEOUT_MS, formatRemaining, useClock, useMedicalCall, writeMedicalCall } from "../../services/medicalCallDemo.js";
+import { useMemo, useState } from "react";
+import { CALL_TIMEOUT_MS, formatRemaining, useClock } from "../../services/medicalCallDemo.js";
 import "./DoctorPage.css";
 
-const DEMO_PATIENTS = [
-  { ticket: "C024", name: "Ana Martins", specialty: "Clínica geral", category: "Convênio", priority: false },
-  { ticket: "CP008", name: "Maria Santos", specialty: "Cardiologia", category: "Convênio", priority: true },
-  { ticket: "P016", name: "Carlos Oliveira", specialty: "Clínica geral", category: "Particular", priority: false },
+const INITIAL = [
+  { id:"demo-1",ticket:"C-024",name:"Ana Martins",specialty:"Clínica Geral",category:"Convênio",priority:false,status:"waiting",history:["Recepção · Cadastro confirmado","Encaminhada para Clínica Geral"] },
+  { id:"demo-2",ticket:"CP-008",name:"Maria Santos",specialty:"Clínica Geral",category:"Convênio",priority:true,status:"waiting",history:["Recepção · Cadastro confirmado","Encaminhada para Clínica Geral"] },
+  { id:"demo-3",ticket:"P-016",name:"Carlos Oliveira",specialty:"Clínica Geral",category:"Particular",priority:false,status:"waiting",history:["Recepção · Cadastro confirmado","Encaminhado para Clínica Geral"] }
 ];
-
-export default function DoctorPage() {
-  const [index, setIndex] = useState(0);
-  const [stage, setStage] = useState("next");
-  const [notice, setNotice] = useState("");
-  const call = useMedicalCall();
-  const now = useClock();
-  const patient = DEMO_PATIENTS[index] ?? null;
-  const currentCall = patient && call?.ticket === patient.ticket ? call : null;
-  const currentStage = currentCall?.status === "called" ? "called" : currentCall?.status === "arrived" ? "arrived" : stage;
-  const remaining = currentCall?.status === "called" ? Math.max(0, currentCall.startedAt + CALL_TIMEOUT_MS - now) : 0;
-  const expired = currentCall?.status === "called" && remaining === 0;
-  const [decision, setDecision] = useState(false);
-
-  function callPatient() {
-    if (!patient) return;
-    writeMedicalCall({ ticket: patient.ticket, status: "called", startedAt: Date.now() });
-    setStage("called");
-    setNotice("");
-    setDecision(false);
-  }
-  function confirmArrival() {
-    if (!patient) return;
-    writeMedicalCall({ ...currentCall, ticket: patient.ticket, status: "arrived" });
-    setStage("arrived");
-    setNotice("Chegada do paciente confirmada com sucesso.");
-    setDecision(false);
-  }
-  function finishAndNext() {
-    if (patient) writeMedicalCall({ ticket: patient.ticket, status: "finished", finishedAt: Date.now() });
-    setIndex(i => i + 1);
-    setStage("next");
-    setNotice("");
-    setDecision(false);
-  }
-  function keepWaiting() {
-    setDecision(false);
-    setNotice("O paciente continuará aguardando. O prazo de dois minutos já terminou.");
-  }
-
-  return <div className="medical-screen">
-    <header className="medical-header"><div className="medical-brand"><span className="medical-logo">S</span><div><strong>SICA</strong><small>SISTEMA DE CONTROLE DE ATENDIMENTO</small></div></div><div className="medical-header-right"><span>Área médica</span><span className="medical-profile">M</span></div></header>
-    <main className="medical-main">
-      <div className="medical-intro"><p className="medical-kicker">ATENDIMENTO MÉDICO</p><h1>{currentStage === "next" ? "Próximo paciente" : currentStage === "called" ? "Paciente chamado" : "Chegada confirmada"}</h1><p>{currentStage === "next" ? "Confira os dados antes de chamar o próximo paciente." : currentStage === "called" ? "Aguarde a chegada do paciente ao consultório." : "O paciente chegou ao consultório e está pronto para o atendimento."}</p></div>
-      {patient ? <>
-        <section className="medical-patient-card" aria-label="Informações do paciente"><div className="medical-ticket"><span>SENHA DO PACIENTE</span><strong>{patient.ticket}</strong></div><div className="medical-patient-details"><span>DADOS DO PACIENTE</span><strong>{patient.name}</strong><p>{patient.specialty}</p><p>{patient.category}{patient.priority ? " • Prioritário" : ""}</p></div></section>
-        {currentStage === "next" && <div className="medical-actions"><button type="button" className="medical-primary" onClick={callPatient}>Chamar paciente</button><span className="medical-action-hint">A senha será chamada para o consultório</span></div>}
-        {currentStage === "called" && <>
-          <section className={"medical-countdown" + (expired ? " medical-countdown--expired" : "")} aria-label="Prazo de chegada"><span>{expired ? "TEMPO ESGOTADO" : "TEMPO RESTANTE PARA CHEGADA"}</span><strong role="timer" aria-live="off">{formatRemaining(remaining)}</strong><p>{expired ? "O prazo terminou. Decida se deseja encerrar a chamada ou continuar aguardando." : "O paciente tem dois minutos para chegar ao consultório."}</p></section>
-          {notice && <p className="medical-info" role="status">{notice}</p>}
-          {expired && !decision && <div className="medical-expired-actions"><strong>O paciente ainda não chegou?</strong><button type="button" className="medical-secondary" onClick={() => setDecision(true)}>Encerrar atendimento?</button></div>}
-          <div className="medical-actions"><button type="button" className="medical-primary" onClick={confirmArrival}>Confirmar chegada</button>{expired && <button type="button" className="medical-secondary" onClick={() => setDecision(true)}>Encerrar e chamar próximo</button>}</div>
-        </>}
-        {currentStage === "arrived" && <><div className="medical-success" role="status"><span aria-hidden="true">✓</span><div><strong>Paciente presente no consultório</strong><p>{notice || "Chegada confirmada."}</p></div></div><div className="medical-actions"><button type="button" className="medical-primary" onClick={finishAndNext}>Concluir e próximo paciente</button></div></>}
-      </> : <section className="medical-empty"><h2>Fila concluída</h2><p>Não há mais pacientes nesta demonstração.</p><button className="medical-secondary" onClick={() => {setIndex(0);setStage("next");}}>Reiniciar demonstração</button></section>}
-      {decision && <div className="medical-confirm-overlay"><section className="medical-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="medical-decision-title"><h2 id="medical-decision-title">Encerrar atendimento?</h2><p>Os dois minutos da senha <strong>{patient?.ticket}</strong> terminaram. Deseja encerrar a chamada e passar ao próximo paciente?</p><div className="medical-actions"><button className="medical-secondary" onClick={keepWaiting}>Não, continuar aguardando</button><button className="medical-primary" onClick={finishAndNext}>Sim, encerrar e chamar próximo</button></div></section></div>}
-      <p className="medical-footnote">Demonstração com dados fictícios. O cronômetro é compartilhado apenas entre abas deste navegador; a integração real com o servidor será feita depois.</p>
-    </main>
-  </div>;
+const label={waiting:"Aguardando",called:"Chamado",in_service:"Em consulta",completed:"Concluído",returned:"Devolvido à recepção",no_show:"Não compareceu"};
+export default function DoctorPage(){
+ const [patients,setPatients]=useState(INITIAL);
+ const [selected,setSelected]=useState(null);
+ const [calledAt,setCalledAt]=useState(null);
+ const [dialog,setDialog]=useState(null);
+ const [reason,setReason]=useState("");
+ const [notice,setNotice]=useState("");
+ const now=useClock();
+ const active=patients.find(p=>p.status==="called"||p.status==="in_service");
+ const waiting=useMemo(()=>patients.filter(p=>p.status==="waiting").sort((a,b)=>Number(b.priority)-Number(a.priority)),[patients]);
+ const current=patients.find(p=>p.id===selected)??active??waiting[0]??null;
+ const remaining=active?.status==="called"&&calledAt?Math.max(0,calledAt+CALL_TIMEOUT_MS-now):null;
+ function update(id,status,message){setPatients(ps=>ps.map(p=>p.id===id?{...p,status,history:[...p.history,message]}:p));setNotice(message);setDialog(null);setReason("");if(status==="returned"||status==="completed"||status==="no_show"){setSelected(null);setCalledAt(null);}}
+ function call(){if(!current||active)return;setSelected(current.id);setCalledAt(Date.now());update(current.id,"called","Senha chamada para o consultório.");}
+ function finish(){if(!current||current.status!=="in_service")return;update(current.id,dialog==="return"?"returned":"completed",dialog==="return"?"Retorno à recepção solicitado"+(reason.trim()?" · Motivo registrado":""):"Atendimento médico concluído.");}
+ return <div className="medical-screen medical-desktop">
+  <header className="medical-header"><div className="medical-brand"><span className="medical-logo">S</span><div><strong>SICA</strong><small>SISTEMA DE CONTROLE DE ATENDIMENTO</small></div></div><div className="medical-header-right"><div className="medical-identity"><strong>Médico de demonstração</strong><span>Clínica Geral · Consultório 01</span></div><span className="medical-profile">MD</span></div></header>
+  <main className="medical-main medical-workspace">
+   <div className="medical-intro"><p className="medical-kicker">ÁREA MÉDICA · PRÉVIA VISUAL</p><h1>Painel de atendimento</h1><p>Gerencie a fila, confirme a chegada e decida o destino do paciente.</p></div>
+   <div className="medical-demo-banner" role="status">Prévia com dados fictícios. As ações abaixo ainda não alteram o Neon, a recepção ou o acompanhamento do paciente.</div>
+   <div className="medical-stats"><div><span>Na fila</span><strong>{waiting.length}</strong></div><div><span>Em chamada</span><strong>{patients.filter(p=>p.status==="called").length}</strong></div><div><span>Em consulta</span><strong>{patients.filter(p=>p.status==="in_service").length}</strong></div><div><span>Concluídos</span><strong>{patients.filter(p=>p.status==="completed").length}</strong></div></div>
+   <div className="medical-columns">
+    <section className="medical-panel medical-queue-panel"><div className="medical-panel-heading"><div><h2>Fila de espera</h2><p>Convênio, particular e prioridade</p></div><span>{waiting.length} aguardando</span></div>
+     {waiting.map(p=><button key={p.id} type="button" className={"medical-queue-item"+(current?.id===p.id?" is-selected":"")} onClick={()=>setSelected(p.id)} disabled={Boolean(active)&&active.id!==p.id}><strong>{p.ticket}</strong><span><b>{p.name}</b><small>{p.category} {p.priority?"· Prioridade":""}</small></span><span className="medical-queue-status">Aguardando</span></button>)}
+     {!waiting.length&&<p className="medical-quiet">Nenhum paciente aguardando.</p>}
+    </section>
+    <section className="medical-panel medical-care-panel"><div className="medical-panel-heading"><div><h2>Atendimento atual</h2><p>{current?"Ficha e ações do paciente":"Fila finalizada"}</p></div><span>{current?label[current.status]:"Sem paciente"}</span></div>
+     {current?<><div className="medical-current"><span>SENHA</span><strong>{current.ticket}</strong><div><h3>{current.name}</h3><p>{current.specialty} · {current.category}{current.priority?" · Prioritário":""}</p></div></div>
+      {current.status==="called"&&<div className={"medical-countdown"+(remaining===0?" medical-countdown--expired":"")}><span>TEMPO PARA COMPARECIMENTO</span><strong>{formatRemaining(remaining??0)}</strong><p>{remaining===0?"Tempo esgotado. Confirme a ausência ou a chegada.":"O paciente tem dois minutos para comparecer."}</p></div>}
+      <div className="medical-action-stack">
+       {current.status==="waiting"&&<button className="medical-primary" onClick={call} disabled={Boolean(active)}>Chamar paciente</button>}
+       {current.status==="called"&&<><button className="medical-primary" onClick={()=>update(current.id,"in_service","Chegada confirmada. Consulta iniciada.")}>Confirmar chegada e iniciar consulta</button>{remaining===0&&<button className="medical-secondary" onClick={()=>setDialog("no_show")}>Registrar não comparecimento</button>}</>}
+       {current.status==="in_service"&&<><button className="medical-primary" onClick={()=>setDialog("complete")}>Encerrar atendimento</button><button className="medical-secondary" onClick={()=>setDialog("return")}>Encaminhar novamente à recepção</button></>}
+      </div>
+      <div className="medical-history"><h3>Histórico da jornada</h3>{current.history.map((h,i)=><p key={i}><span aria-hidden="true">●</span>{h}</p>)}</div>
+     </>:<div className="medical-empty"><h2>Fila concluída</h2><p>Não há pacientes aguardando nesta prévia.</p><button className="medical-secondary" onClick={()=>{setPatients(INITIAL);setSelected(null);setNotice("");}}>Reiniciar prévia</button></div>}
+    </section>
+   </div>
+   {notice&&<p className="medical-info" role="status">{notice}</p>}
+  </main>
+  {dialog&&current&&<div className="medical-confirm-overlay"><section className="medical-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="medical-dialog-title"><h2 id="medical-dialog-title">{dialog==="return"?"Devolver à recepção?":dialog==="complete"?"Encerrar atendimento?":"Registrar ausência?"}</h2><p>Senha <strong>{current.ticket}</strong> · {current.name}</p><p>{dialog==="return"?"Na integração real, o paciente voltará ao final da fila de recepção da mesma categoria e prioridade.":dialog==="complete"?"Esta ação concluirá a jornada do paciente.":"A senha ficará marcada como não compareceu, para eventual recuperação excepcional."}</p>{dialog==="return"&&<label className="medical-reason">Motivo do retorno (opcional)<textarea maxLength={300} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Ex.: Agendamento de exame"/></label>}<div className="medical-actions"><button className="medical-secondary" onClick={()=>setDialog(null)}>Cancelar</button><button className="medical-primary" onClick={()=>dialog==="no_show"?update(current.id,"no_show","Paciente não compareceu à chamada."):finish()}>Confirmar</button></div></section></div>}
+ </div>;
 }
