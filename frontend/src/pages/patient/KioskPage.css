@@ -1,1 +1,54 @@
 .kiosk-page{min-height:100dvh;background:#eef4f7;color:#103b59}.kiosk-screen{min-height:100dvh;background:#f5f9fc;position:relative;padding-top:92px}.kiosk-header{position:fixed;top:0;left:0;right:0;z-index:20;height:92px;padding:16px clamp(20px,4vw,68px);background:#fff;box-shadow:0 2px 18px #0c4f8b13;display:flex;justify-content:space-between;align-items:center}.kiosk-brand{display:flex;align-items:center;gap:12px}.kiosk-symbol{display:grid;place-items:center;width:54px;height:54px;border-radius:15px;background:linear-gradient(145deg,#39b995,#1788bf);font-size:36px;font-weight:900;color:white;font-style:italic}.kiosk-brand strong{display:block;font-size:23px;letter-spacing:.07em;line-height:1}.kiosk-brand small{display:block;margin-top:7px;font-size:9px;letter-spacing:.055em;color:#63859a}.kiosk-header-label{font-size:12px;font-weight:800;letter-spacing:.13em;color:#147ca9}.kiosk-main{width:min(100% - 36px,790px);margin:0 auto;padding:clamp(30px,5vh,65px) 0 48px;text-align:center}.kiosk-overline{color:#0b987f;font-weight:800;letter-spacing:.14em;font-size:12px;margin:0 0 12px}.kiosk-main h1{font-size:clamp(30px,4.2vw,48px);line-height:1.13;letter-spacing:-.04em;margin:0;color:#123e5e}.kiosk-intro{font-size:clamp(15px,1.6vw,18px);color:#56778b;margin:13px 0 30px}.kiosk-options{display:grid;grid-template-columns:1fr;gap:14px;text-align:left}.kiosk-option{--accent:#e9811b;display:flex;align-items:center;gap:18px;position:relative;overflow:hidden;width:100%;min-height:112px;border:2px solid #e1ebf1;border-radius:18px;background:#fff;box-shadow:0 8px 22px #1b4d7312;cursor:pointer;padding:17px 25px 17px 0;text-align:left;font:inherit;color:#173f5a;transition:transform .15s,box-shadow .15s,border-color .15s;touch-action:manipulation;-webkit-tap-highlight-color:transparent}.kiosk-option--orange{--accent:#f28a1d}.kiosk-option--red{--accent:#e53d48}.kiosk-option--light-blue{--accent:#2eb9e8}.kiosk-option--dark-blue{--accent:#1456a6}.kiosk-option-accent{align-self:stretch;position:absolute;top:0;bottom:0;left:0;width:15px;background:var(--accent)}.kiosk-option-number{margin-left:29px;flex:0 0 66px;height:66px;border-radius:15px;background:color-mix(in srgb,var(--accent) 13%,white);color:var(--accent);display:grid;place-items:center;font-weight:900;font-size:27px}.kiosk-option-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}.kiosk-option-content strong{font-size:clamp(19px,2.3vw,24px);font-weight:800}.kiosk-option-content small{font-size:clamp(12px,1.4vw,15px);color:#637f90;line-height:1.4}.kiosk-option-arrow{font-size:42px;color:var(--accent);font-weight:400;line-height:1}.kiosk-option:hover,.kiosk-option:focus-visible{border-color:var(--accent);box-shadow:0 12px 30px #16466824;transform:translateY(-2px);outline:none}.kiosk-option:active{transform:scale(.99)}.kiosk-option:disabled{cursor:wait;opacity:.7;transform:none}.kiosk-priority-note{color:#5b788b;font-size:13px;margin:22px 0}.kiosk-status{position:fixed;inset:92px 0 0;z-index:15;background:#f5f9fcf5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px}.kiosk-status strong{font-size:clamp(24px,4vw,36px);color:#103b59}.kiosk-status span{color:#5b788b;font-size:16px}.kiosk-status-spinner{width:54px;height:54px;border:5px solid #d5e8f2;border-top-color:#168ab9;border-radius:50%;animation:kiosk-spin .75s linear infinite}.kiosk-status button{border:0;border-radius:12px;background:#116b96;color:white;font:inherit;padding:14px 22px;cursor:pointer}@keyframes kiosk-spin{to{transform:rotate(360deg)}}.kiosk-print-only{display:none}@media(max-width:600px){.kiosk-screen{padding-top:76px}.kiosk-header{height:76px;padding:12px 17px}.kiosk-symbol{width:43px;height:43px;font-size:29px;border-radius:12px}.kiosk-brand strong{font-size:18px}.kiosk-brand small{font-size:7px}.kiosk-header-label{font-size:9px}.kiosk-main{width:calc(100% - 26px);padding:30px 0}.kiosk-intro{margin-bottom:23px}.kiosk-options{gap:11px}.kiosk-option{min-height:100px;gap:12px;border-radius:14px;padding:14px 14px 14px 0}.kiosk-option-accent{width:11px}.kiosk-option-number{margin-left:20px;flex-basis:52px;height:54px;font-size:21px;border-radius:11px}.kiosk-option-content strong{font-size:18px}.kiosk-option-content small{font-size:12px}.kiosk-option-arrow{font-size:30px}.kiosk-status{top:76px}}@media(max-width:370px){.kiosk-header-label{display:none}.kiosk-option-number{flex-basis:42px;margin-left:16px}.kiosk-option{gap:9px}}@media print{@page{size:80mm auto;margin:0}html,body,#root{margin:0!important;padding:0!important;width:80mm!important;min-width:0!important;background:white!important}.kiosk-page,.kiosk-screen{display:block!important;min-height:0!important;padding:0!important;margin:0!important;background:white!important}.kiosk-header,.kiosk-main{display:none!important}.kiosk-print-only{display:flex!important;width:76mm!important;margin:0 auto!important;padding:5mm 2mm!important;align-items:center!important;flex-direction:column!important;text-align:center!important;gap:3mm!important;color:#000!important;font-family:Arial,sans-serif!important;break-inside:avoid!important}.kiosk-print-brand{font-size:19pt;font-weight:900}.kiosk-print-only p{margin:1mm 0;font-size:10pt}.kiosk-print-only strong{font-size:12pt}.kiosk-print-number{font-size:38pt!important;font-weight:900!important;line-height:1.1}.kiosk-print-only small{font-size:8pt}.kiosk-print-only svg{display:block!important;max-width:50mm!important;height:auto!important}}
+
+/* Compact touch-first layout for 10–15-inch kiosk screens. */
+@media (min-width:601px) and (max-height:900px){
+  .kiosk-screen{padding-top:68px}
+  .kiosk-header{height:68px;padding:9px clamp(16px,3vw,38px)}
+  .kiosk-symbol{width:42px;height:42px;font-size:29px;border-radius:11px}
+  .kiosk-brand strong{font-size:19px}
+  .kiosk-brand small{font-size:7px;margin-top:4px}
+  .kiosk-header-label{font-size:10px}
+  .kiosk-main{width:min(100% - 28px,680px);padding:clamp(12px,2.2vh,22px) 0 12px}
+  .kiosk-overline{font-size:10px;margin-bottom:6px}
+  .kiosk-main h1{font-size:clamp(25px,3vw,36px)}
+  .kiosk-intro{font-size:14px;margin:7px 0 16px}
+  .kiosk-options{gap:9px}
+  .kiosk-option{min-height:clamp(75px,11vh,94px);padding:10px 18px 10px 0;gap:13px;border-radius:13px}
+  .kiosk-option-accent{width:12px}
+  .kiosk-option-number{margin-left:24px;flex-basis:54px;height:54px;font-size:22px;border-radius:12px}
+  .kiosk-option-content{gap:3px}
+  .kiosk-option-content strong{font-size:19px}
+  .kiosk-option-content small{font-size:12px}
+  .kiosk-option-arrow{font-size:34px}
+  .kiosk-priority-note{margin:12px 0 0;font-size:11px}
+  .kiosk-status{inset:68px 0 0}
+}
+@media (max-width:600px) and (max-height:850px){
+  .kiosk-screen{padding-top:64px}
+  .kiosk-header{height:64px;padding:8px 14px}
+  .kiosk-symbol{width:39px;height:39px;font-size:27px}
+  .kiosk-main{padding:15px 0 10px}
+  .kiosk-overline{font-size:10px;margin-bottom:5px}
+  .kiosk-main h1{font-size:clamp(24px,6vw,30px)}
+  .kiosk-intro{font-size:13px;margin:7px 0 15px}
+  .kiosk-options{gap:8px}
+  .kiosk-option{min-height:clamp(76px,11vh,94px);padding:10px 12px 10px 0}
+  .kiosk-option-number{height:48px;flex-basis:48px;font-size:19px}
+  .kiosk-option-content strong{font-size:17px}
+  .kiosk-option-content small{font-size:11px}
+  .kiosk-priority-note{margin:12px 0 0;font-size:11px}
+  .kiosk-status{inset:64px 0 0}
+}
+@media (max-height:650px) and (min-width:601px){
+  .kiosk-main{padding-top:9px}
+  .kiosk-intro{margin-bottom:9px}
+  .kiosk-options{gap:6px}
+  .kiosk-option{min-height:69px;padding-top:7px;padding-bottom:7px}
+  .kiosk-option-number{height:44px;flex-basis:48px}
+  .kiosk-option-content strong{font-size:17px}
+  .kiosk-option-content small{font-size:11px}
+  .kiosk-priority-note{margin-top:7px}
+}
+@media (prefers-reduced-motion:reduce){
+  .kiosk-option,.kiosk-status-spinner{transition:none;animation:none}
+}
