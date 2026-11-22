@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getDemoRows, SECTION_META } from "./adminDemoData.js";
 import DevicesPage from "./DevicesPage.jsx";
+import DoctorsPage from "./DoctorsPage.jsx";
 import "./AdminPage.css";
 import "./AdminSectionPage.css";
 
@@ -19,6 +20,7 @@ function Settings() {
 export default function AdminSectionPage() {
   const { section: currentSection } = useParams();
   if(currentSection==="dispositivos") return <DevicesPage/>;
+  if(currentSection==="profissionais") return <DoctorsPage/>;
   return <DemoSectionPage/>;
 }
 
