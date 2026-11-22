@@ -1,3 +1,4 @@
+import { decryptTrackingToken } from "../security/trackingToken.js";
 import { getPool } from "../config/database.js";
 export async function adminAttendance(req,res){
  res.set("Cache-Control","no-store");
@@ -32,4 +33,30 @@ export async function adminAttendance(req,res){
   ]);
   return res.json({queues:queues.rows,entries:entries.rows,serverTime:new Date().toISOString()});
  }catch(e){console.error("Admin attendance error",{code:e.code??"UNKNOWN"});return res.status(503).json({error:"Não foi possível carregar os atendimentos do Neon"});}
+}
+
+export async function adminAttendanceTracking(req,res){
+ res.set("Cache-Control","no-store");
+ if(req.staff?.role!=="admin")return res.status(403).json({error:"Acesso restrito"});
+ const id=req.params.entryId;
+ if(typeof id!=="string"||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))return res.status(400).json({error:"Ficha inválida"});
+ const client=await getPool().connect();
+ try{
+  await client.query("BEGIN");
+  const result=await client.query(`SELECT j.id AS journey_id,j.tracking_token_encrypted
+   FROM public.queue_entries e JOIN public.patient_journeys j ON j.id=e.journey_id
+   WHERE e.id=$1 AND e.status IN ('waiting','called','in_service')
+   AND j.tracking_revoked_at IS NULL AND j.tracking_expires_at>now()
+   AND j.status NOT IN ('completed','cancelled')`,[id]);
+  if(!result.rowCount||!result.rows[0].tracking_token_encrypted){
+   await client.query("ROLLBACK");
+   return res.status(404).json({error:"Link de acompanhamento indisponível ou expirado"});
+  }
+  const token=decryptTrackingToken(result.rows[0].tracking_token_encrypted);
+  await client.query(`INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id)
+   VALUES($1,'attendance.tracking.viewed','patient_journey',$2)`,[req.staff.id,result.rows[0].journey_id]);
+  await client.query("COMMIT");
+  return res.json({trackingToken:token});
+ }catch(error){await client.query("ROLLBACK").catch(()=>{});console.error("Admin tracking access error",{code:error.code??"UNKNOWN"});return res.status(503).json({error:"Não foi possível recuperar o acompanhamento"});}
+ finally{client.release();}
 }
