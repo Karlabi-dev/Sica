@@ -4,6 +4,7 @@ import { getDemoRows, SECTION_META } from "./adminDemoData.js";
 import DevicesPage from "./DevicesPage.jsx";
 import DoctorsPage from "./DoctorsPage.jsx";
 import PatientsPage from "./PatientsPage.jsx";
+import AttendancePage from "./AttendancePage.jsx";
 import QueuesPage from "./QueuesPage.jsx";
 import AuditPage from "./AuditPage.jsx";
 import CatalogPage from "./CatalogPage.jsx";
@@ -26,6 +27,7 @@ export default function AdminSectionPage() {
   if(currentSection==="dispositivos") return <DevicesPage/>;
   if(currentSection==="profissionais") return <DoctorsPage/>;
   if(currentSection==="pacientes") return <PatientsPage/>;
+  if(currentSection==="atendimentos") return <AttendancePage/>;
   if(currentSection==="filas") return <QueuesPage/>;
   if(currentSection==="auditoria") return <AuditPage/>;
   if(currentSection==="especialidades") return <CatalogPage kind="specialties"/>;
