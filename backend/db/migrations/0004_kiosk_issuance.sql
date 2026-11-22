@@ -3,6 +3,9 @@ BEGIN;
 INSERT INTO public.clinic_settings(id,name,website_url,timezone)
 VALUES (1,'SICA - FORTALEZA',NULL,'America/Fortaleza')
 ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.queue_definitions(name,stage_type,queue_mode,active)
+SELECT 'Recepção - Totem','reception','shared',true
+WHERE NOT EXISTS (SELECT 1 FROM public.queue_definitions WHERE stage_type='reception' AND queue_mode='shared' AND active=true);
 CREATE TABLE IF NOT EXISTS public.kiosk_ticket_counters (
   local_date DATE NOT NULL,
   category VARCHAR(32) NOT NULL CHECK (category IN ('convenio','convenio-prioridade','particular','particular-prioridade')),
