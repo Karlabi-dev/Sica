@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { auth } from "../../services/firebase.js";
+import { deviceRequest } from "../../services/device.js";
 import "./AttendantPage.css";
 
 const API = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
@@ -17,15 +17,7 @@ export default function AttendantPage() {
   const [busy,setBusy]=useState(false);
   const [loading,setLoading]=useState(true);
 
-  const api=useCallback(async (path,options={})=>{
-    const user=auth.currentUser;
-    if (!user) throw new Error("Entre com uma conta autorizada pela clínica.");
-    const token=await user.getIdToken();
-    const response=await fetch(`${API}${path}`,{...options,headers:{Authorization:`Bearer ${token}`,"X-Admin-Session":sessionStorage.getItem("sica_admin_session")??"",...(options.headers??{})},cache:"no-store"});
-    const body=await response.json().catch(()=>({}));
-    if (!response.ok) throw new Error(body.error??"Não foi possível concluir a operação.");
-    return body;
-  },[]);
+  const api=useCallback((path,options={})=>deviceRequest(path,options),[]);
   const refresh=useCallback(async ()=>{
     try { const result=await api("/staff/reception/overview");setData(result);setError(""); }
     catch(err){setError(err.message);}
