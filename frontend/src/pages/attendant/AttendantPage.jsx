@@ -16,6 +16,10 @@ export default function AttendantPage() {
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
   const [loading,setLoading]=useState(true);
+  const [patientName,setPatientName]=useState("");
+  const [whatsapp,setWhatsapp]=useState("");
+  const [destinationQueue,setDestinationQueue]=useState("");
+  const [trackingLink,setTrackingLink]=useState("");
 
   const api=useCallback((path,options={})=>deviceRequest(path,options),[]);
   const refresh=useCallback(async ()=>{
@@ -36,11 +40,32 @@ export default function AttendantPage() {
     setBusy(true);setNotice("");setError("");
     try {
       await api(`/staff/reception/entries/${entry.id}/${action}`,{method:"POST"});
-      setSelected(entry.id);setTab("atendimento");
+      setSelected(entry.id);setTab("atendimento");setTrackingLink("");
       setNotice(action==="call"?`Senha ${entry.ticket_code} chamada. O paciente verá o cronômetro no acompanhamento.`:"Chegada confirmada na recepção.");
       await refresh();
     } catch(err) {setError(err.message);}
     finally {setBusy(false);}
+  }
+
+  const destinations=data.queues.filter(q=>["consultation","exam"].includes(q.stage_type));
+  async function handoff(entry) {
+    if(busy)return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      const result=await api(`/staff/reception/entries/${entry.id}/handoff`,{method:"POST",body:JSON.stringify({patientName,whatsapp,queueId:destinationQueue})});
+      const url=window.location.origin+"/acompanhar/"+encodeURIComponent(result.trackingToken);
+      setTrackingLink(url);setNotice(`Paciente encaminhado para ${result.queueName}. Compartilhe o link de acompanhamento.`);
+      await refresh();
+    }catch(err){setError(err.message);}finally{setBusy(false);}
+  }
+  async function showTracking(entry) {
+    setBusy(true);setError("");
+    try{
+      const result=await api(`/staff/reception/entries/${entry.id}/tracking-link`,{method:"POST"});
+      setTrackingLink(window.location.origin+"/acompanhar/"+encodeURIComponent(result.trackingToken));
+      setSelected(entry.id);setTab("atendimento");
+      setNotice("Novo link gerado. Links anteriores desta senha deixam de funcionar.");
+    }catch(err){setError(err.message);}finally{setBusy(false);}
   }
 
   return <div className="attendant-app attendant-live">
@@ -61,9 +86,18 @@ export default function AttendantPage() {
           <div className="attendant-grid"><section className="attendant-card"><div className="attendant-card-head"><div><h2>Próxima senha</h2><p>Atendimento por ordem e prioridade</p></div><span className="attendant-chip">Recepção</span></div><div className="attendant-next"><span>PRÓXIMA CHAMADA</span><strong>{next?.ticket_code??"—"}</strong><p>{waiting.length} aguardando</p></div><button type="button" className="attendant-primary attendant-wide" disabled={!next||busy} onClick={()=>perform(next,"call")}>Chamar próxima senha</button></section>
           <section className="attendant-card"><div className="attendant-card-head"><div><h2>Filas da clínica</h2><p>Selecione para visualizar as senhas</p></div></div><div className="attendant-queue-grid">{data.queues.map(q=><button type="button" key={q.id} className="attendant-queue-button" onClick={()=>{setSelectedQueue(q.id);setTab("fila");}}><span>{q.name}</span><strong>{q.waiting}</strong><small>{label(q.stage_type)} · aguardando</small></button>)}</div>{!data.queues.length&&<p>Nenhuma fila configurada.</p>}</section></div>
         </>}
-        {tab==="fila"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Filas de espera</h2><p>Selecione uma fila para visualizar seus atendimentos</p></div></div><div className="attendant-queue-grid">{data.queues.map(q=><button key={q.id} type="button" className={selectedQueue===q.id?"attendant-queue-button active":"attendant-queue-button"} onClick={()=>setSelectedQueue(selectedQueue===q.id?null:q.id)}><span>{q.name}</span><strong>{q.waiting}</strong><small>{label(q.stage_type)}</small></button>)}</div><div className="attendant-table-wrap"><table className="attendant-table"><thead><tr><th>Senha</th><th>Fila</th><th>Prioridade</th><th>Situação</th><th>Ação</th></tr></thead><tbody>{filtered.map(e=><tr key={e.id}><td><strong className="attendant-ticket">{e.ticket_code}</strong></td><td>{e.queue_name}</td><td>{e.legal_priority?"Prioritário":"Comum"}</td><td>{statusLabels[e.status]??e.status}</td><td>{e.stage_type==="reception"&&e.status==="waiting"?<button type="button" disabled={busy} className="attendant-small-button" onClick={()=>perform(e,"call")}>Chamar</button>:<button type="button" className="attendant-small-button" onClick={()=>{setSelected(e.id);setTab("atendimento");}}>Ver detalhes</button>}</td></tr>)}</tbody></table>{!filtered.length&&<div className="attendant-empty">Nenhuma senha nesta seleção.</div>}</div></section>}
-        {tab==="atendimento"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Atendimento da recepção</h2><p>Confira a senha e confirme a chegada ao balcão</p></div></div>{current?<><div className="attendant-highlight"><span>SENHA SELECIONADA</span><strong>{current.ticket_code}</strong><p>{current.queue_name}</p></div><div className="attendant-info-grid"><div><span>Situação</span><strong>{statusLabels[current.status]??current.status}</strong></div><div><span>Prioridade</span><strong>{current.legal_priority?"Prioritário":"Comum"}</strong></div><div><span>Paciente</span><strong>{current.patient_name??"Ainda não cadastrado"}</strong></div><div><span>Etapa</span><strong>{label(current.stage_type)}</strong></div></div>{current.stage_type==="reception"&&current.status==="called"&&<button type="button" disabled={busy} className="attendant-primary attendant-wide" onClick={()=>perform(current,"arrival")}>Confirmar chegada ao balcão</button>}<p className="attendant-disclaimer">Cadastro de dados, envio de WhatsApp e encaminhamento estão em preparação; não registre informações clínicas nesta versão.</p></>:<div className="attendant-empty">Chame ou selecione uma senha para começar.</div>}</section>}
-        {tab==="pacientes"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Senhas registradas</h2><p>Dados operacionais disponíveis no Neon</p></div></div><input className="attendant-input attendant-search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar senha, fila ou nome" aria-label="Buscar senhas"/><div className="attendant-table-wrap"><table className="attendant-table"><thead><tr><th>Senha</th><th>Fila</th><th>Paciente</th><th>Situação</th></tr></thead><tbody>{filtered.map(e=><tr key={e.id}><td>{e.ticket_code}</td><td>{e.queue_name}</td><td>{e.patient_name??"Não cadastrado"}</td><td>{statusLabels[e.status]??e.status}</td></tr>)}</tbody></table></div></section>}
+        {tab==="fila"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Filas de espera</h2><p>Selecione uma fila para visualizar seus atendimentos</p></div></div><div className="attendant-queue-grid">{data.queues.map(q=><button key={q.id} type="button" className={selectedQueue===q.id?"attendant-queue-button active":"attendant-queue-button"} onClick={()=>setSelectedQueue(selectedQueue===q.id?null:q.id)}><span>{q.name}</span><strong>{q.waiting}</strong><small>{label(q.stage_type)}</small></button>)}</div><div className="attendant-table-wrap"><table className="attendant-table"><thead><tr><th>Senha</th><th>Fila</th><th>Prioridade</th><th>Situação</th><th>Ação</th></tr></thead><tbody>{filtered.map(e=><tr key={e.id}><td><strong className="attendant-ticket">{e.ticket_code}</strong></td><td>{e.queue_name}</td><td>{e.legal_priority?"Prioritário":"Comum"}</td><td>{statusLabels[e.status]??e.status}</td><td>{e.stage_type==="reception"&&e.status==="waiting"?<button type="button" disabled={busy} className="attendant-small-button" onClick={()=>perform(e,"call")}>Chamar</button>:<button type="button" className="attendant-small-button" onClick={()=>{setSelected(e.id);setTab("atendimento");setTrackingLink("");}}>Ver detalhes</button>}</td></tr>)}</tbody></table>{!filtered.length&&<div className="attendant-empty">Nenhuma senha nesta seleção.</div>}</div></section>}
+        {tab==="atendimento"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Atendimento da recepção</h2><p>Confira a senha e confirme a chegada ao balcão</p></div></div>{current?<><div className="attendant-highlight"><span>SENHA SELECIONADA</span><strong>{current.ticket_code}</strong><p>{current.queue_name}</p></div><div className="attendant-info-grid"><div><span>Situação</span><strong>{statusLabels[current.status]??current.status}</strong></div><div><span>Prioridade</span><strong>{current.legal_priority?"Prioritário":"Comum"}</strong></div><div><span>Paciente</span><strong>{current.patient_name??"Ainda não cadastrado"}</strong></div><div><span>Etapa</span><strong>{label(current.stage_type)}</strong></div></div>{current.stage_type==="reception"&&current.status==="called"&&<button type="button" disabled={busy} className="attendant-primary attendant-wide" onClick={()=>perform(current,"arrival")}>Confirmar chegada ao balcão</button>}{current.stage_type==="reception"&&current.status==="in_service"&&<form onSubmit={event=>{event.preventDefault();handoff(current);}} style={{display:"grid",gap:12,marginTop:24}}>
+          <h3>Cadastrar paciente e encaminhar</h3>
+          <label>Nome completo *<input className="attendant-input" required minLength={2} maxLength={180} value={patientName} onChange={e=>setPatientName(e.target.value)} placeholder="Nome do paciente"/></label>
+          <label>WhatsApp (opcional)<input className="attendant-input" type="tel" value={whatsapp} onChange={e=>setWhatsapp(e.target.value)} placeholder="(85) 99999-9999"/></label>
+          <small>O WhatsApp será cadastrado apenas para testes. Notificações automáticas ainda não estão disponíveis.</small>
+          <label>Encaminhar para *<select className="attendant-input" required value={destinationQueue} onChange={e=>setDestinationQueue(e.target.value)}><option value="">Selecione a fila</option>{destinations.map(q=><option key={q.id} value={q.id}>{q.name}</option>)}</select></label>
+          <button type="submit" className="attendant-primary" disabled={busy||!destinationQueue||!patientName.trim()}>Salvar e encaminhar</button>
+        </form>}
+        {current.patient_name&&<button type="button" className="attendant-outline" disabled={busy} onClick={()=>showTracking(current)}>Gerar link de acompanhamento</button>}
+        {trackingLink&&<section style={{padding:16,marginTop:16,background:"#f1f7fb",borderRadius:12,overflowWrap:"anywhere"}}><h3>Acompanhamento pelo celular</h3><a href={trackingLink} target="_blank" rel="noopener noreferrer">{trackingLink}</a><div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" className="attendant-outline" onClick={()=>navigator.clipboard.writeText(trackingLink)}>Copiar link</button><a className="attendant-outline" href={trackingLink} target="_blank" rel="noopener noreferrer">Abrir acompanhamento</a></div><small>O link dá acesso ao status da senha. Não compartilhe publicamente. Ao gerar outro, o anterior é invalidado.</small></section>}</>:<div className="attendant-empty">Chame ou selecione uma senha para começar.</div>}</section>}
+        {tab==="pacientes"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Senhas registradas</h2><p>Dados operacionais disponíveis no Neon</p></div></div><input className="attendant-input attendant-search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar senha, fila ou nome" aria-label="Buscar senhas"/><div className="attendant-table-wrap"><table className="attendant-table"><thead><tr><th>Senha</th><th>Fila</th><th>Paciente</th><th>Situação</th></tr></thead><tbody>{filtered.map(e=><tr key={e.id}><td>{e.ticket_code}</td><td>{e.queue_name}</td><td>{e.patient_name??"Não cadastrado"}</td><td>{statusLabels[e.status]??e.status}</td><td><button type="button" className="attendant-small-button" onClick={()=>{setSelected(e.id);setTab("atendimento");setTrackingLink("");}}>Detalhes</button></td></tr>)}</tbody></table></div></section>}
       </>}
     </div>
   </div>;
