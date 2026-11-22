@@ -11,3 +11,8 @@
 .admin-catalog-typography button{font-size:1.05rem;min-height:40px}
 .admin-catalog-typography .admin-form-notice{font-size:1.05rem}
 @media(max-width:600px){.admin-catalog-typography .admin-table th,.admin-catalog-typography .admin-table td{font-size:1rem}}
+
+/* Checkbox e texto na mesma linha, independentemente do layout geral dos formulários. */
+.admin-catalog-typography .admin-settings label.admin-catalog-active-toggle{display:inline-flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:10px;width:max-content;max-width:100%;cursor:pointer}
+.admin-catalog-typography .admin-settings .admin-catalog-active-toggle input[type="checkbox"]{flex:0 0 20px;margin:0}
+.admin-catalog-typography .admin-catalog-active-toggle span{font-size:1.1rem;line-height:1.4}
