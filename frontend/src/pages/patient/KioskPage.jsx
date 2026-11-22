@@ -18,17 +18,26 @@ function Brand() {
 
 export default function KioskPage() {
   const [choice, setChoice] = useState(null);
+  const [ticket, setTicket] = useState(null);
+  const [clinicName, setClinicName] = useState("SICA - FORTALEZA");
   const [phase, setPhase] = useState("choose");
   const [notice, setNotice] = useState("");
   const resetTimer = useRef(null);
   const printTimer = useRef(null);
   const printing = useRef(false);
   const choiceRef = useRef(null);
+  const issuing = useRef(false);
+  const API = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+  useEffect(() => {
+    fetch(`${API}/public/clinic`, { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(data => { if (data?.name) setClinicName(data.name); }).catch(() => {});
+  }, []);
 
   function reset() {
     if (resetTimer.current) window.clearTimeout(resetTimer.current);
     if (printTimer.current) window.clearTimeout(printTimer.current);
     printing.current = false;
+    issuing.current = false;
+    setTicket(null);
     choiceRef.current = null;
     setChoice(null);
     setPhase("choose");
@@ -49,17 +58,28 @@ export default function KioskPage() {
     };
   }, []);
 
-  function selectOption(option) {
-    if (printing.current || phase !== "choose") return;
-    printing.current = true;
+  async function selectOption(option) {
+    if (printing.current || issuing.current || phase !== "choose") return;
+    issuing.current = true;
     choiceRef.current = option;
     setNotice("");
-    setChoice(option);
-    setPhase("printing");
+    setPhase("issuing");
+    try {
+      const response = await fetch(`${API}/public/kiosk/tickets`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ category: option.id, requestId: crypto.randomUUID() }), cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Não foi possível emitir a senha.");
+      setTicket(data);
+      setChoice(option);
+      printing.current = true;
+      setPhase("printing");
+    } catch (error) {
+      setNotice(error.message || "Falha ao emitir senha. Procure a recepção.");
+      setPhase("error");
+    } finally { issuing.current = false; }
   }
 
   useEffect(() => {
-    if (phase !== "printing" || !choice) return;
+    if (phase !== "printing" || !choice || !ticket) return;
     const frame = window.requestAnimationFrame(() => {
       printTimer.current = window.setTimeout(() => {
         try {
@@ -72,9 +92,11 @@ export default function KioskPage() {
       }, 250);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [phase, choice]);
+  }, [phase, choice, ticket]);
 
-  const trackingUrl = typeof window === "undefined" ? "/acompanhar/demo" : new URL("/acompanhar/" + (choice?.demo || "demo"), window.location.origin).href;
+  const publicOrigin = import.meta.env.VITE_PUBLIC_BASE_URL || (typeof window !== "undefined" ? window.location.origin : "");
+  const trackingUrl = ticket ? new URL("/acompanhar/" + ticket.trackingToken, publicOrigin).href : ""; 
+  const issuedAt = ticket ? new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Fortaleza", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(ticket.issuedAt)) : "";
 
   return <div className="kiosk-page">
     <div className="kiosk-screen">
@@ -94,20 +116,22 @@ export default function KioskPage() {
         <p className="kiosk-priority-note">Tem direito ao atendimento prioritário? Escolha uma das opções com “Prioridade”.</p>
         {phase !== "choose" && <div className="kiosk-status" role="status" aria-live="polite">
           <div className="kiosk-status-spinner" aria-hidden="true" />
-          <strong>{phase === "printing" ? "Preparando impressão..." : phase === "done" ? "Retire seu comprovante!" : "Impressão não iniciada"}</strong>
-          <span>{phase === "printing" ? "Aguarde a janela de impressão." : phase === "done" ? "Voltando ao início..." : notice}</span>
+          <strong>{phase === "issuing" ? "Gerando sua senha..." : phase === "printing" ? "Preparando impressão..." : phase === "done" ? "Retire seu comprovante!" : "Impressão não iniciada"}</strong>
+          <span>{phase === "issuing" ? "Aguarde alguns instantes." : phase === "printing" ? "Aguarde a janela de impressão." : phase === "done" ? "Voltando ao início..." : notice}</span>
           {phase === "error" && <button type="button" onClick={reset}>Voltar ao início</button>}
         </div>}
       </main>
-      {choice && <section className="kiosk-print-only" aria-label="Comprovante para impressão">
-        <div className="kiosk-print-brand">SICA</div>
-        <p>SENHA DE ATENDIMENTO</p>
-        <strong className="kiosk-print-number">{choice.demo}</strong>
-        <strong>{choice.title}</strong>
-        <p>Dirija-se à recepção e aguarde sua chamada.</p>
+      {ticket && <section className="kiosk-print-only" aria-label="Comprovante para impressão">
+        <div className="kiosk-print-brand">{ticket.clinicName || clinicName}</div>
+        <p>SEJA BEM-VINDO(A)!</p>
+        <p>SUA SENHA É:</p>
+        <strong className="kiosk-print-number">{ticket.ticketCode}</strong>
+        <strong>{ticket.categoryLabel}</strong>
+        <p>Emitido em {issuedAt.replace(", ", " às ")}</p>
+        <strong>Acompanhe seu atendimento</strong>
+        <p>Escaneie o QR Code abaixo para consultar sua posição na fila e acompanhar as atualizações do atendimento.</p>
         <QRCodeSVG value={trackingUrl} size={168} level="M" marginSize={1} title="QR Code para acompanhamento" />
-        <small>Escaneie para acompanhar sua senha</small>
-        <small>PROTÓTIPO — SENHA DE DEMONSTRAÇÃO</small>
+        <small>Aguarde sua chamada e mantenha este comprovante.</small>
       </section>}
     </div>
   </div>;
