@@ -32,14 +32,21 @@ export default function LoginPage() {
         cache: "no-store",
       });
       if (!response.ok) {
-        if (response.status === 403) {
+        const detail = await response.json().catch(() => ({}));
+        if (response.status === 403 && detail.error === "Multi-factor authentication required") {
           navigate("/admin/verificar-email", { replace: true });
           return;
         }
         await signOut(auth);
-        setMessage(response.status === 403
-          ? "Conta sem autorização para acessar o SICA ou com MFA pendente."
-          : "Não foi possível validar seu acesso com o servidor.");
+        const messages = {
+          "Access not authorized": "Sua conta existe no Firebase, mas não está autorizada como funcionário no SICA. Peça ao administrador para cadastrar seu usuário no Neon.",
+          "Invalid or expired session": "O servidor não conseguiu validar sua sessão Firebase. Verifique se frontend e backend usam o mesmo projeto Firebase.",
+          "Authorization service unavailable": "O servidor não conseguiu consultar a autorização no banco de dados. Verifique a conexão DATABASE_URL e os logs do backend.",
+          "Authentication required": "A sessão não foi enviada ao servidor. Tente entrar novamente."
+        };
+        setMessage(messages[detail.error] ?? (response.status === 503
+          ? "O serviço de autorização está indisponível. Confira os logs do backend no Render."
+          : `Falha na validação do acesso (HTTP ${response.status}). Verifique o backend no Render.`));
         return;
       }
       const staff = await response.json();
