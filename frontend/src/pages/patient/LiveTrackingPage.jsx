@@ -77,7 +77,7 @@ export default function LiveTrackingPage() {
           {called && <section className={`tracking-call-timer ${expired ? "tracking-call-timer--expired" : ""}`} aria-label="Tempo restante para comparecimento">
             <span>{expired ? "TEMPO ENCERRADO" : "TEMPO PARA COMPARECER"}</span>
             <strong role="timer" aria-live="off">{remaining === null ? "--:--" : formatTime(remaining)}</strong>
-            <p>{expired ? "O médico irá encerrar seu atendimento a qualquer momento." : remaining === null ? "Aguardando horário da chamada no servidor." : "O cronômetro começa no instante da chamada registrada pelo profissional."}</p>
+            <p>{expired ? (reception ? "A recepção poderá encerrar sua chamada a qualquer momento." : "O médico irá encerrar seu atendimento a qualquer momento.") : remaining === null ? "Aguardando horário da chamada no servidor." : "O cronômetro começa no instante da chamada registrada pelo profissional."}</p>
           </section>}
           <aside className={`tracking-notice tracking-notice--${called ? "called" : "waiting"}`} role="status">
             <strong>{called ? "Você foi chamado!" : ticket.status === "waiting" ? "Aguarde sua chamada" : status}</strong>
