@@ -18,10 +18,10 @@ const OperationalLayout = lazy(() => import('../layouts/OperationalLayout.jsx'))
 const AdminLayout = lazy(() => import('../layouts/AdminLayout.jsx'));
 class RouteErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { failed: false }; }
-  static getDerivedStateFromError() { return { failed: true }; }
+  static getDerivedStateFromError(error) { return { failed: true, errorMessage: String(error?.message ?? "Erro desconhecido").slice(0, 300) }; }
   componentDidCatch(error) { console.error("SICA route rendering failed", error); }
   render() {
-    if (this.state.failed) return <main style={{ padding: 32, fontFamily: "system-ui", color: "#164f76" }}><h1>Não foi possível abrir o painel</h1><p>Atualize a página. Se continuar, envie uma captura do erro para corrigirmos.</p><button onClick={() => window.location.reload()}>Tentar novamente</button></main>;
+    if (this.state.failed) return <main style={{ padding: 32, fontFamily: "system-ui", color: "#164f76" }}><h1>Não foi possível abrir o painel</h1><p>Ocorreu um erro ao renderizar esta página.</p><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",background:"#f2f6fa",padding:12,borderRadius:8}}>{this.state.errorMessage}</pre><p>Envie a mensagem acima para identificarmos a causa.</p><button onClick={() => window.location.reload()}>Tentar novamente</button></main>;
     return this.props.children;
   }
 }
