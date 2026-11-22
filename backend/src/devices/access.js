@@ -54,7 +54,7 @@ export async function listDevices(req,res) {
 }
 export async function approveDevice(req,res) {
  if(req.staff?.role!=="admin") return res.status(403).json({error:"Somente administradores"});
- const {name,role,roomId}=req.body??{};
+ const {name,role,roomId,doctorId}=req.body??{};
  if(typeof name!=="string"||!name.trim()||name.trim().length>120||!["attendant","doctor"].includes(role)) return res.status(400).json({error:"Nome e função inválidos"});
  if(roomId!=null&&!/^[0-9a-f-]{36}$/i.test(roomId)) return res.status(400).json({error:"Sala inválida"});
  const client=await getPool().connect();
@@ -64,14 +64,23 @@ export async function approveDevice(req,res) {
   const device=rows[0];
   if(!device||device.status==="revoked") {await client.query("ROLLBACK");return res.status(409).json({error:"Dispositivo inexistente ou revogado"});}
   let staffId=device.staff_user_id;
+  let assignedRoom=roomId??null;
+  if(role==="doctor") {
+   if(typeof doctorId!=="string"||!/^[0-9a-f-]{36}$/i.test(doctorId)){await client.query("ROLLBACK");return res.status(400).json({error:"Selecione um médico cadastrado"});}
+   const doctor=await client.query("SELECT p.room_id FROM public.doctor_profiles p JOIN public.staff_users s ON s.id=p.staff_user_id WHERE s.id=$1 AND s.role='doctor' AND s.active=true AND p.enabled=true",[doctorId]);
+   if(!doctor.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Médico não cadastrado ou inativo"});}
+   const occupied=await client.query("SELECT id FROM public.authorized_devices WHERE staff_user_id=$1 AND id<>$2 AND status='active'",[doctorId,device.id]);
+   if(occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Médico já autorizado em outro computador"});}
+   staffId=doctorId;assignedRoom=doctor.rows[0].room_id;
+  }
   if(!staffId) {
    const staff=await client.query(`INSERT INTO public.staff_users(firebase_uid,display_name,role,active)
      VALUES($1,$2,$3,true) RETURNING id`,["device:"+device.id,name.trim(),role]);
    staffId=staff.rows[0].id;
-  }else{
+  }else if(role!=="doctor"){
    await client.query("UPDATE public.staff_users SET display_name=$2,role=$3,active=true,updated_at=now() WHERE id=$1",[staffId,name.trim(),role]);
   }
-  await client.query(`UPDATE public.authorized_devices SET name=$2,role=$3,room_id=$4,staff_user_id=$5,status='active',approved_at=now(),approved_by=$6 WHERE id=$1`,[device.id,name.trim(),role,roomId??null,staffId,req.staff.id]);
+  await client.query(`UPDATE public.authorized_devices SET name=$2,role=$3,room_id=$4,staff_user_id=$5,status='active',approved_at=now(),approved_by=$6 WHERE id=$1`,[device.id,name.trim(),role,assignedRoom,staffId,req.staff.id]);
   await client.query("COMMIT");
   return res.json({status:"active"});
  }catch(err){await client.query("ROLLBACK").catch(()=>{});return failure(res,err);}finally{client.release();}
