@@ -8,7 +8,7 @@ import { rateLimit } from "./security/rateLimit.js";
 import { revokeAdminSession } from "./auth/adminEmailSession.js";
 import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js";
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
-import { receptionOverview, receptionCall, receptionArrival } from "./reception/operations.js";
+import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, receptionTrackingLink } from "./reception/operations.js";
 
 import { requestDevice, deviceStatus, operationalAuth, listDevices, approveDevice, revokeDevice } from "./devices/access.js";
 
@@ -62,6 +62,8 @@ app.post("/admin/devices/:id/revoke", staffAuth, revokeDevice);
 app.get("/staff/reception/overview", operationalAuth, receptionOverview);
 app.post("/staff/reception/entries/:entryId/call", operationalAuth, receptionCall);
 app.post("/staff/reception/entries/:entryId/arrival", operationalAuth, receptionArrival);
+app.post("/staff/reception/entries/:entryId/handoff", operationalAuth, receptionHandoff);
+app.post("/staff/reception/entries/:entryId/tracking-link", operationalAuth, receptionTrackingLink);
 
 app.post("/auth/admin/email-code/request", rateLimit({windowMs:900000,max:6}), requestAdminEmailCode);
 app.post("/auth/admin/email-code/verify", rateLimit({windowMs:900000,max:15}), verifyAdminEmailCode);
