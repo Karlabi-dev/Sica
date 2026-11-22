@@ -74,6 +74,16 @@ export async function adminCatalogWrite(req,res){
  const table=kind==="rooms"?"rooms":"specialties";const client=await getPool().connect();
  try{
   await client.query("BEGIN");
+  if(id&&!active){
+   const current=await client.query(`SELECT active FROM public.${table} WHERE id=$1 FOR UPDATE`,[id]);
+   if(!current.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Registro não encontrado"});}
+   if(current.rows[0].active){
+    const linked=kind==="specialties"?
+     await client.query("SELECT 1 FROM public.queue_definitions WHERE specialty_id=$1 AND active=true LIMIT 1",[id]):
+     await client.query("SELECT 1 FROM public.doctor_profiles p JOIN public.queue_definitions q ON q.id=p.queue_definition_id WHERE p.room_id=$1 AND p.enabled=true AND q.active=true LIMIT 1",[id]);
+    if(linked.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:kind==="specialties"?"Desative primeiro todas as filas ativas desta especialidade.":"Este consultório está vinculado a uma fila ativa. Desvincule-o antes de desativar."});}
+   }
+  }
   const result=id?await client.query(`UPDATE public.${table} SET name=$2,active=$3 WHERE id=$1 RETURNING id`,[id,name.trim(),active]):
    await client.query(`INSERT INTO public.${table}(name,active) VALUES($1,$2) RETURNING id`,[name.trim(),active]);
   if(!result.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Registro não encontrado"});}
@@ -103,8 +113,9 @@ export async function adminCatalogDelete(req,res){
  const client=await getPool().connect();
  try{
   await client.query("BEGIN");
-  const found=await client.query(`SELECT id,name FROM public.${kind} WHERE id=$1 FOR UPDATE`,[id]);
+  const found=await client.query(`SELECT id,name,active FROM public.${kind} WHERE id=$1 FOR UPDATE`,[id]);
   if(!found.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Registro não encontrado"});}
+  if(found.rows[0].active){await client.query("ROLLBACK");return res.status(409).json({error:"Desative o registro antes de excluí-lo."});}
   if(kind==="specialties"){
    const linked=await client.query(`SELECT
     (SELECT count(*)::int FROM public.queue_definitions WHERE specialty_id=$1) AS queues,
