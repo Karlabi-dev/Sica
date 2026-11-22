@@ -73,3 +73,22 @@ export async function updateDoctor(req,res) {
   await client.query("COMMIT");return res.json({status:"updated"});
  }catch(e){await client.query("ROLLBACK").catch(()=>{});if(e.code==="23505")return res.status(409).json({error:"Consultório já ocupado"});return fail(res,e);}finally{client.release();}
 }
+
+export async function deleteDoctor(req,res){
+ res.set("Cache-Control","no-store");
+ if(forbidden(req,res))return;
+ if(!uuid(req.params.id))return res.status(400).json({error:"Médico inválido"});
+ const client=await getPool().connect();
+ try{
+  await client.query("BEGIN");
+  const doctor=await client.query("SELECT id,display_name,active FROM public.staff_users WHERE id=$1 AND role='doctor' FOR UPDATE",[req.params.id]);
+  if(!doctor.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Médico não encontrado"});}
+  const active=await client.query("SELECT 1 FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.doctor_profiles dp ON dp.queue_definition_id=qs.definition_id WHERE dp.staff_user_id=$1 AND e.status IN ('waiting','called','in_service') LIMIT 1",[req.params.id]);
+  if(active.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Existe atendimento ativo na fila do médico. Finalize os atendimentos antes de excluí-lo."});}
+  await client.query("UPDATE public.staff_users SET active=false,updated_at=now() WHERE id=$1",[req.params.id]);
+  await client.query("UPDATE public.doctor_profiles SET enabled=false,queue_definition_id=NULL,room_id=NULL,updated_at=now() WHERE staff_user_id=$1",[req.params.id]);
+  await client.query("UPDATE public.authorized_devices SET status='revoked' WHERE staff_user_id=$1 AND status='active'",[req.params.id]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'doctor.archived','staff_user',$2,$3::jsonb)",[req.staff.id,req.params.id,JSON.stringify({name:doctor.rows[0].display_name})]);
+  await client.query("COMMIT");return res.json({status:"archived"});
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});return fail(res,e);}finally{client.release();}
+}
