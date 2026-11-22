@@ -134,8 +134,8 @@ export async function adminCatalogDelete(req,res){
 export async function adminQueuesWrite(req,res){
  res.set("Cache-Control","no-store");if(!admin(req,res))return;
  const {name,specialtyId,doctorIds,queueMode,active}=req.body??{};
- if(typeof name!=="string"||name.trim().length<2||name.trim().length>120||!uuid(specialtyId)||!Array.isArray(doctorIds)||!doctorIds.length||doctorIds.length>30||!doctorIds.every(uuid)||new Set(doctorIds).size!==doctorIds.length||!["shared","individual"].includes(queueMode)||typeof active!=="boolean")
-  return res.status(400).json({error:"Selecione especialidade, médicos e modalidade"});
+ if(typeof name!=="string"||name.trim().length<2||name.trim().length>120||!uuid(specialtyId)||!Array.isArray(doctorIds)||doctorIds.length>30||!doctorIds.every(uuid)||new Set(doctorIds).size!==doctorIds.length||!["shared","individual"].includes(queueMode)||typeof active!=="boolean")
+  return res.status(400).json({error:"Selecione especialidade e modalidade"});
  const client=await getPool().connect();
  try{
   await client.query("BEGIN");
@@ -148,7 +148,7 @@ export async function adminQueuesWrite(req,res){
    const previous=await client.query("SELECT queue_definition_id FROM public.doctor_profiles WHERE staff_user_id=$1 FOR UPDATE",[doctorId]);
    if(!previous.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Cadastre o consultório do médico antes de configurar a fila"});}
    const occupied=await client.query("SELECT 1 FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id WHERE qs.definition_id=$1 AND e.status IN ('waiting','called','in_service') LIMIT 1",[previous.rows[0].queue_definition_id]);
-   if(occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Existem pacientes ativos na fila anterior. Conclua os atendimentos antes de alterar a equipe"});}
+   if(previous.rows[0].queue_definition_id&&occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Existem pacientes ativos na fila anterior. Conclua os atendimentos antes de alterar a equipe"});}
   }
   const q=await client.query(`INSERT INTO public.queue_definitions(name,stage_type,specialty_id,queue_mode,active)
    VALUES($1,'consultation',$2,$3,$4) RETURNING id`,[name.trim(),specialtyId,queueMode,active]);
