@@ -9,6 +9,8 @@ import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js"
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
 import { receptionOverview, receptionCall, receptionArrival } from "./reception/operations.js";
 
+import { requestDevice, deviceStatus, operationalAuth, listDevices, approveDevice, revokeDevice } from "./devices/access.js";
+
 const app = express();
 app.disable("x-powered-by");
 app.use(helmet());
@@ -50,9 +52,14 @@ app.get("/ready", async (_req, res) => {
 app.get("/public/clinic", clinicPublic);
 app.post("/public/kiosk/tickets", issueKioskTicket);
 app.get("/public/track/:token", trackTicket);
-app.get("/staff/reception/overview", staffAuth, receptionOverview);
-app.post("/staff/reception/entries/:entryId/call", staffAuth, receptionCall);
-app.post("/staff/reception/entries/:entryId/arrival", staffAuth, receptionArrival);
+app.post("/devices/request", requestDevice);
+app.get("/devices/status", deviceStatus);
+app.get("/admin/devices", staffAuth, listDevices);
+app.patch("/admin/devices/:id/approve", staffAuth, approveDevice);
+app.post("/admin/devices/:id/revoke", staffAuth, revokeDevice);
+app.get("/staff/reception/overview", operationalAuth, receptionOverview);
+app.post("/staff/reception/entries/:entryId/call", operationalAuth, receptionCall);
+app.post("/staff/reception/entries/:entryId/arrival", operationalAuth, receptionArrival);
 
 app.post("/auth/admin/email-code/request", requestAdminEmailCode);
 app.post("/auth/admin/email-code/verify", verifyAdminEmailCode);
