@@ -2,7 +2,9 @@ import { Component } from "react";
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 const StaffGuard = lazy(() => import('./StaffGuard.jsx'));
+const DeviceGuard = lazy(() => import('./DeviceGuard.jsx'));
 import HomePage from '../pages/HomePage.jsx';
+const DevicePendingPage = lazy(() => import('../pages/auth/DevicePendingPage.jsx'));
 const LoginPage = lazy(() => import('../pages/auth/LoginPage.jsx'));
 const AdminEmailVerificationPage = lazy(() => import('../pages/auth/AdminEmailVerificationPage.jsx'));
 import KioskPage from '../pages/patient/KioskPage.jsx';
@@ -25,4 +27,4 @@ class RouteErrorBoundary extends Component {
     return this.props.children;
   }
 }
-export function AppRoutes(){return <RouteErrorBoundary><Suspense fallback={<main className="page"><p>Carregando...</p></main>}><Routes><Route path="/" element={<HomePage/>}/><Route element={<PublicLayout/>}><Route path="/totem" element={<KioskPage/>}/><Route path="/acompanhar/:token" element={<LiveTrackingPage/>}/><Route path="/clinica" element={<ClinicLandingPage/>}/><Route path="/tv" element={<TvPage/>}/></Route><Route path="/login" element={<LoginPage/>}/><Route path="/admin/verificar-email" element={<AdminEmailVerificationPage/>}/><Route element={<StaffGuard roles={["attendant", "admin"]}/> }><Route element={<OperationalLayout/>}><Route path="/atendente" element={<AttendantPage/>}/></Route></Route><Route element={<StaffGuard roles={["doctor", "admin"]}/> }><Route element={<OperationalLayout/>}><Route path="/medico" element={<DoctorPage/>}/></Route></Route><Route element={<StaffGuard roles={["admin"]}/> }><Route element={<AdminLayout/>}><Route path="/admin" element={<AdminPage/>}/><Route path="/admin/:section" element={<AdminSectionPage/>}/></Route></Route><Route path="*" element={<Navigate to="/" replace/>}/></Routes></Suspense></RouteErrorBoundary>;}
+export function AppRoutes(){return <RouteErrorBoundary><Suspense fallback={<main className="page"><p>Carregando...</p></main>}><Routes><Route path="/" element={<HomePage/>}/><Route element={<PublicLayout/>}><Route path="/totem" element={<KioskPage/>}/><Route path="/acompanhar/:token" element={<LiveTrackingPage/>}/><Route path="/clinica" element={<ClinicLandingPage/>}/><Route path="/tv" element={<TvPage/>}/></Route><Route path="/login" element={<LoginPage/>}/><Route path="/autorizar-computador" element={<DevicePendingPage/>}/><Route path="/admin/verificar-email" element={<AdminEmailVerificationPage/>}/><Route element={<DeviceGuard role="attendant"/>}><Route element={<OperationalLayout/>}><Route path="/atendente" element={<AttendantPage/>}/></Route></Route><Route element={<DeviceGuard role="doctor"/>}><Route element={<OperationalLayout/>}><Route path="/medico" element={<DoctorPage/>}/></Route></Route><Route element={<StaffGuard roles={["admin"]}/> }><Route element={<AdminLayout/>}><Route path="/admin" element={<AdminPage/>}/><Route path="/admin/:section" element={<AdminSectionPage/>}/></Route></Route><Route path="*" element={<Navigate to="/" replace/>}/></Routes></Suspense></RouteErrorBoundary>;}
