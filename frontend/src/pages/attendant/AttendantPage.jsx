@@ -55,7 +55,8 @@ export default function AttendantPage() {
     setBusy(true);setError("");setNotice("");
     try{
       const result=await api(`/staff/reception/entries/${entry.id}/handoff`,{method:"POST",body:JSON.stringify({patientName,whatsapp,queueId:destinationQueue})});
-      const url=window.location.origin+"/acompanhar/"+encodeURIComponent(result.trackingToken);
+      const link=await api(`/staff/reception/entries/${result.entryId}/tracking-link`,{method:"POST"});
+      const url=window.location.origin+"/acompanhar/"+encodeURIComponent(link.trackingToken);
       setTrackingLink(url);
       setReceipt({ticketCode:entry.ticket_code,patientName:patientName.trim(),queueName:result.queueName,trackingLink:url,issuedAt:new Date().toLocaleString("pt-BR")});
       setNotice(`Paciente encaminhado para ${result.queueName}. Compartilhe o link de acompanhamento.`);
@@ -70,7 +71,7 @@ export default function AttendantPage() {
       setTrackingLink(url);
       setReceipt({ticketCode:entry.ticket_code,patientName:entry.patient_name,queueName:entry.queue_name,trackingLink:url,issuedAt:new Date().toLocaleString("pt-BR")});
       setSelected(entry.id);setTab("atendimento");
-      setNotice("Novo link gerado. Links anteriores desta senha deixam de funcionar.");
+      setNotice("Link original do Totem recuperado. O QR Code permanece o mesmo.");
     }catch(err){setError(err.message);}finally{setBusy(false);}
   }
 
@@ -101,8 +102,8 @@ export default function AttendantPage() {
           <label>Encaminhar para *<select className="attendant-input" required value={destinationQueue} onChange={e=>setDestinationQueue(e.target.value)}><option value="">Selecione a fila</option>{destinations.map(q=><option key={q.id} value={q.id}>{q.name}</option>)}</select></label>
           <button type="submit" className="attendant-primary" disabled={busy||!destinationQueue||!patientName.trim()}>Salvar e encaminhar</button>
         </form>}
-        {current.patient_name&&<button type="button" className="attendant-outline" disabled={busy} onClick={()=>showTracking(current)}>Gerar link de acompanhamento</button>}
-        {trackingLink&&<section style={{padding:16,marginTop:16,background:"#f1f7fb",borderRadius:12,overflowWrap:"anywhere"}}><h3>Acompanhamento pelo celular</h3><div style={{background:"#fff",padding:12,width:"fit-content",borderRadius:8,marginBottom:12}}><QRCodeSVG value={trackingLink} size={184} level="M" /></div><a href={trackingLink} target="_blank" rel="noopener noreferrer">{trackingLink}</a><div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" className="attendant-outline" onClick={()=>navigator.clipboard.writeText(trackingLink)}>Copiar link</button><a className="attendant-outline" href={trackingLink} target="_blank" rel="noopener noreferrer">Abrir acompanhamento</a></div><button type="button" className="attendant-primary" onClick={()=>window.print()} disabled={!receipt}>Imprimir comprovante</button><small>O link dá acesso ao status da senha. Não compartilhe publicamente. Ao gerar outro, o anterior é invalidado.</small></section>}</>:<div className="attendant-empty">Chame ou selecione uma senha para começar.</div>}</section>}
+        {current.patient_name&&<button type="button" className="attendant-outline" disabled={busy} onClick={()=>showTracking(current)}>Ver link e QR Code originais</button>}
+        {trackingLink&&<section style={{padding:16,marginTop:16,background:"#f1f7fb",borderRadius:12,overflowWrap:"anywhere"}}><h3>Acompanhamento pelo celular</h3><div style={{background:"#fff",padding:12,width:"fit-content",borderRadius:8,marginBottom:12}}><QRCodeSVG value={trackingLink} size={184} level="M" /></div><a href={trackingLink} target="_blank" rel="noopener noreferrer">{trackingLink}</a><div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" className="attendant-outline" onClick={()=>navigator.clipboard.writeText(trackingLink)}>Copiar link</button><a className="attendant-outline" href={trackingLink} target="_blank" rel="noopener noreferrer">Abrir acompanhamento</a></div><button type="button" className="attendant-primary" onClick={()=>window.print()} disabled={!receipt}>Imprimir comprovante</button><small>O link dá acesso ao status da senha. Não compartilhe publicamente. O QR Code é o mesmo do Totem e não muda com o encaminhamento.</small></section>}</>:<div className="attendant-empty">Chame ou selecione uma senha para começar.</div>}</section>}
         {tab==="pacientes"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Senhas registradas</h2><p>Dados operacionais disponíveis no Neon</p></div></div><input className="attendant-input attendant-search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar senha, fila ou nome" aria-label="Buscar senhas"/><div className="attendant-table-wrap"><table className="attendant-table"><thead><tr><th>Senha</th><th>Fila</th><th>Paciente</th><th>Situação</th></tr></thead><tbody>{filtered.map(e=><tr key={e.id}><td>{e.ticket_code}</td><td>{e.queue_name}</td><td>{e.patient_name??"Não cadastrado"}</td><td>{statusLabels[e.status]??e.status}</td><td><button type="button" className="attendant-small-button" onClick={()=>{setSelected(e.id);setTab("atendimento");setTrackingLink("");}}>Detalhes</button></td></tr>)}</tbody></table></div></section>}
       </>}
     </div>
