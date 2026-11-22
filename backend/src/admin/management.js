@@ -1,0 +1,105 @@
+import { getPool } from "../config/database.js";
+import { decryptTrackingToken } from "../security/trackingToken.js";
+const uuid=v=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+const admin=(req,res)=>req.staff?.role!=="admin"?(res.status(403).json({error:"Acesso restrito à administração"}),false):true;
+const fail=(res,e)=>{console.error("Admin management failed",{code:e.code??"UNKNOWN"});return res.status(503).json({error:"Não foi possível consultar ou salvar no banco"});};
+export async function adminPatients(req,res){
+ res.set("Cache-Control","no-store");if(!admin(req,res))return;
+ try{
+  const {rows}=await getPool().query(`SELECT j.id AS journey_id,j.started_at,j.completed_at,j.status AS journey_status,
+   p.full_name,p.phone,(SELECT e.ticket_code FROM public.queue_entries e WHERE e.journey_id=j.id ORDER BY e.enqueued_at ASC LIMIT 1) AS ticket_code,
+   (SELECT e.status FROM public.queue_entries e WHERE e.journey_id=j.id ORDER BY e.enqueued_at DESC,e.id DESC LIMIT 1) AS current_status
+   FROM public.patient_journeys j LEFT JOIN public.patients p ON p.id=j.patient_id
+   ORDER BY j.started_at DESC LIMIT 500`);
+  return res.json({patients:rows});
+ }catch(e){return fail(res,e);}
+}
+export async function adminPatientJourney(req,res){
+ res.set("Cache-Control","no-store");if(!admin(req,res))return;
+ if(!uuid(req.params.id))return res.status(400).json({error:"Identificador inválido"});
+ try{
+  const pool=getPool();
+  const journey=(await pool.query(`SELECT j.id,j.started_at,j.completed_at,j.status,p.full_name,p.phone,j.tracking_expires_at,j.tracking_revoked_at,j.tracking_token_encrypted
+    FROM public.patient_journeys j LEFT JOIN public.patients p ON p.id=j.patient_id WHERE j.id=$1`,[req.params.id])).rows[0];
+  if(!journey)return res.status(404).json({error:"Jornada não encontrada"});
+  const {rows}=await pool.query(`SELECT e.id,e.ticket_code,e.status,e.enqueued_at,e.called_at,e.service_started_at,e.service_finished_at,
+   q.name AS queue_name,q.stage_type,r.name AS room_name
+   FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id
+   JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions q ON q.id=qs.definition_id
+   LEFT JOIN LATERAL (SELECT room_id FROM public.call_events c WHERE c.queue_entry_id=e.id ORDER BY c.called_at DESC LIMIT 1) ce ON true
+   LEFT JOIN public.rooms r ON r.id=ce.room_id WHERE e.journey_id=$1 ORDER BY e.enqueued_at,e.id`,[req.params.id]);
+  const {tracking_token_encrypted,tracking_expires_at,tracking_revoked_at,...safe}=journey;
+  let trackingToken=null;
+  if(tracking_token_encrypted&&!tracking_revoked_at&&new Date(tracking_expires_at)>new Date()&&journey.status!=="completed")trackingToken=decryptTrackingToken(tracking_token_encrypted);
+  await pool.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,'patient.history.viewed','patient_journey',$2)",[req.staff.id,req.params.id]);
+  return res.json({journey:safe,events:rows,trackingToken});
+ }catch(e){return fail(res,e);}
+}
+export async function adminAudit(req,res){
+ res.set("Cache-Control","no-store");if(!admin(req,res))return;
+ const action=typeof req.query.action==="string"?req.query.action.slice(0,100):"";
+ const from=typeof req.query.from==="string"?req.query.from:"";
+ const to=typeof req.query.to==="string"?req.query.to:"";
+ const actor=typeof req.query.actor==="string"?req.query.actor.slice(0,160):"";
+ if((from&&!/^\d{4}-\d{2}-\d{2}$/.test(from))||(to&&!/^\d{4}-\d{2}-\d{2}$/.test(to)))return res.status(400).json({error:"Datas inválidas"});
+ try{
+  const {rows}=await getPool().query(`SELECT a.id,a.created_at,a.action,a.resource_type,a.resource_id,a.request_id,a.metadata,
+   s.display_name AS actor_name,s.role AS actor_role FROM public.audit_events a
+   LEFT JOIN public.staff_users s ON s.id=a.actor_user_id
+   WHERE ($1='' OR a.action ILIKE '%'||$1||'%') AND ($2='' OR a.created_at >= $2::date)
+   AND ($3='' OR a.created_at < $3::date+interval '1 day') AND ($4='' OR s.display_name ILIKE '%'||$4||'%')
+   ORDER BY a.created_at DESC,a.id DESC LIMIT 500`,[action,from,to,actor]);
+  return res.json({events:rows});
+ }catch(e){return fail(res,e);}
+}
+export async function adminCatalog(req,res){
+ res.set("Cache-Control","no-store");if(!admin(req,res))return;
+ try{
+  const pool=getPool();const [specialties,rooms,queues,doctors]=await Promise.all([
+   pool.query("SELECT id,name,active FROM public.specialties ORDER BY name"),
+   pool.query("SELECT id,name,active FROM public.rooms ORDER BY name"),
+   pool.query(`SELECT q.id,q.name,q.stage_type,q.queue_mode,q.specialty_id,q.active,
+    s.name AS specialty_name FROM public.queue_definitions q LEFT JOIN public.specialties s ON s.id=q.specialty_id
+    WHERE q.stage_type IN ('consultation','exam') ORDER BY q.name`),
+   pool.query(`SELECT s.id,s.display_name,s.active,p.room_id,p.queue_definition_id FROM public.staff_users s
+    JOIN public.doctor_profiles p ON p.staff_user_id=s.id WHERE s.role='doctor' ORDER BY s.display_name`)
+  ]);return res.json({specialties:specialties.rows,rooms:rooms.rows,queues:queues.rows,doctors:doctors.rows});
+ }catch(e){return fail(res,e);}
+}
+export async function adminCatalogWrite(req,res){
+ res.set("Cache-Control","no-store");if(!admin(req,res))return;
+ const {kind,id}=req.params;const {name,active}=req.body??{};
+ if(!["specialties","rooms"].includes(kind)||id&&!uuid(id)||typeof name!=="string"||name.trim().length<2||name.trim().length>100||typeof active!=="boolean")
+  return res.status(400).json({error:"Dados inválidos"});
+ const table=kind==="rooms"?"rooms":"specialties";const client=await getPool().connect();
+ try{
+  await client.query("BEGIN");
+  const result=id?await client.query(`UPDATE public.${table} SET name=$2,active=$3 WHERE id=$1 RETURNING id`,[id,name.trim(),active]):
+   await client.query(`INSERT INTO public.${table}(name,active) VALUES($1,$2) RETURNING id`,[name.trim(),active]);
+  if(!result.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Registro não encontrado"});}
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,$2,$3,$4)",[req.staff.id,id?"catalog.updated":"catalog.created",table,result.rows[0].id]);
+  await client.query("COMMIT");return res.json({id:result.rows[0].id});
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});if(e.code==="23505")return res.status(409).json({error:"Já existe um registro com este nome"});return fail(res,e);}finally{client.release();}
+}
+export async function adminQueuesWrite(req,res){
+ res.set("Cache-Control","no-store");if(!admin(req,res))return;
+ const {name,specialtyId,doctorIds,queueMode,active}=req.body??{};
+ if(typeof name!=="string"||name.trim().length<2||name.trim().length>120||!uuid(specialtyId)||!Array.isArray(doctorIds)||!doctorIds.length||doctorIds.length>30||!doctorIds.every(uuid)||new Set(doctorIds).size!==doctorIds.length||!["shared","individual"].includes(queueMode)||typeof active!=="boolean")
+  return res.status(400).json({error:"Selecione especialidade, médicos e modalidade"});
+ const client=await getPool().connect();
+ try{
+  await client.query("BEGIN");
+  const valid=await client.query("SELECT id FROM public.staff_users WHERE id=ANY($1::uuid[]) AND role='doctor' AND active=true",[doctorIds]);
+  if(valid.rowCount!==doctorIds.length){await client.query("ROLLBACK");return res.status(409).json({error:"Um ou mais médicos estão inativos"});}
+  const specialty=await client.query("SELECT 1 FROM public.specialties WHERE id=$1 AND active=true",[specialtyId]);
+  if(!specialty.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Especialidade inativa"});}
+  const q=await client.query(`INSERT INTO public.queue_definitions(name,stage_type,specialty_id,queue_mode,active)
+   VALUES($1,'consultation',$2,$3,$4) RETURNING id`,[name.trim(),specialtyId,queueMode,active]);
+  for(const doctorId of doctorIds){
+   await client.query("UPDATE public.doctor_profiles SET queue_definition_id=$2,updated_at=now() WHERE staff_user_id=$1",[doctorId,q.rows[0].id]);
+   await client.query("INSERT INTO public.professional_specialties(staff_user_id,specialty_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[doctorId,specialtyId]);
+  }
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'queue.configured','queue_definition',$2,$3::jsonb)",[req.staff.id,q.rows[0].id,JSON.stringify({mode:queueMode,doctorCount:doctorIds.length})]);
+  await client.query("COMMIT");return res.status(201).json({id:q.rows[0].id});
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});return fail(res,e);}finally{client.release();}
+}
