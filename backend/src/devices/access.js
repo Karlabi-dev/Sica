@@ -10,7 +10,12 @@ export async function requestDevice(req,res) {
  const token=validToken(existing)?existing:randomBytes(32).toString("hex");
  try {
   const {rows}=await getPool().query(`INSERT INTO public.authorized_devices(device_token_hash) VALUES($1)
-   ON CONFLICT(device_token_hash) DO UPDATE SET device_token_hash=EXCLUDED.device_token_hash
+   ON CONFLICT(device_token_hash) DO UPDATE SET
+    status=CASE WHEN authorized_devices.status='revoked' THEN 'pending' ELSE authorized_devices.status END,
+    staff_user_id=CASE WHEN authorized_devices.status='revoked' THEN NULL ELSE authorized_devices.staff_user_id END,
+    role=CASE WHEN authorized_devices.status='revoked' THEN NULL ELSE authorized_devices.role END,
+    room_id=CASE WHEN authorized_devices.status='revoked' THEN NULL ELSE authorized_devices.room_id END,
+    name=CASE WHEN authorized_devices.status='revoked' THEN NULL ELSE authorized_devices.name END
    RETURNING id,name,role,status`,[hash(token)]);
   return res.status(200).json({...rows[0],token});
  } catch(err){return failure(res,err);}
@@ -64,6 +69,9 @@ export async function approveDevice(req,res) {
   const device=rows[0];
   if(!device||device.status==="revoked") {await client.query("ROLLBACK");return res.status(409).json({error:"Dispositivo inexistente ou revogado"});}
   let staffId=device.staff_user_id;
+  const previousStaffId=staffId;
+  const previousStaff=previousStaffId?await client.query("SELECT firebase_uid FROM public.staff_users WHERE id=$1",[previousStaffId]):{rows:[]};
+  const synthetic=previousStaff.rows[0]?.firebase_uid?.startsWith("device:")??false;
   let assignedRoom=roomId??null;
   if(role==="doctor") {
    if(typeof doctorId!=="string"||!/^[0-9a-f-]{36}$/i.test(doctorId)){await client.query("ROLLBACK");return res.status(400).json({error:"Selecione um médico cadastrado"});}
@@ -73,6 +81,7 @@ export async function approveDevice(req,res) {
    if(occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Médico já autorizado em outro computador"});}
    staffId=doctorId;assignedRoom=doctor.rows[0].room_id;
   }
+  if(role!=="doctor"&&!synthetic)staffId=null;
   if(!staffId) {
    const staff=await client.query(`INSERT INTO public.staff_users(firebase_uid,display_name,role,active)
      VALUES($1,$2,$3,true) RETURNING id`,["device:"+device.id,name.trim(),role]);
@@ -80,6 +89,7 @@ export async function approveDevice(req,res) {
   }else if(role!=="doctor"){
    await client.query("UPDATE public.staff_users SET display_name=$2,role=$3,active=true,updated_at=now() WHERE id=$1",[staffId,name.trim(),role]);
   }
+  if(previousStaffId&&previousStaffId!==staffId&&synthetic)await client.query("UPDATE public.staff_users SET active=false WHERE id=$1",[previousStaffId]);
   await client.query(`UPDATE public.authorized_devices SET name=$2,role=$3,room_id=$4,staff_user_id=$5,status='active',approved_at=now(),approved_by=$6 WHERE id=$1`,[device.id,name.trim(),role,assignedRoom,staffId,req.staff.id]);
   await client.query("COMMIT");
   return res.json({status:"active"});
