@@ -10,6 +10,7 @@ import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js"
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
 import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, receptionTrackingLink } from "./reception/operations.js";
 
+import { doctorCatalog, createDoctor, updateDoctor } from "./admin/doctors.js";
 import { requestDevice, deviceStatus, operationalAuth, listDevices, approveDevice, revokeDevice } from "./devices/access.js";
 
 const app = express();
@@ -56,6 +57,9 @@ app.post("/public/kiosk/tickets", rateLimit({windowMs:60000,max:15}), issueKiosk
 app.get("/public/track/:token", trackTicket);
 app.post("/devices/request", rateLimit({windowMs:3600000,max:8}), requestDevice);
 app.get("/devices/status", deviceStatus);
+app.get("/admin/doctors", staffAuth, doctorCatalog);
+app.post("/admin/doctors", staffAuth, createDoctor);
+app.patch("/admin/doctors/:id", staffAuth, updateDoctor);
 app.get("/admin/devices", staffAuth, listDevices);
 app.patch("/admin/devices/:id/approve", staffAuth, approveDevice);
 app.post("/admin/devices/:id/revoke", staffAuth, revokeDevice);
