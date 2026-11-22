@@ -60,7 +60,7 @@ export async function createDoctor(req,res) {
    VALUES($1,'doctor.created','staff_user',$2)`,[req.staff.id,s.rows[0].id]);
   await client.query("COMMIT");
   return res.status(201).json({id:s.rows[0].id});
- }catch(e){await client.query("ROLLBACK").catch(()=>{});if(e.code==="SCHEDULE")return res.status(400).json({error:"Horários ou especialidade inválidos"});if(e.code==="23505")return res.status(409).json({error:"Consultório já vinculado a outro médico ativo"});return fail(res,e);}finally{client.release();}
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});if(e.code==="SCHEDULE")return res.status(400).json({error:"Horários ou especialidade inválidos"});if(e.code==="23505")return res.status(409).json({error:e.constraint==="uq_doctor_profile_room"?"Este consultório já está ocupado por outro médico ativo. Escolha outro consultório ou desative o vínculo anterior.":"Já existe um cadastro com esses dados. Verifique os vínculos de consultório e fila."});return fail(res,e);}finally{client.release();}
 }
 
 export async function updateDoctor(req,res) {
