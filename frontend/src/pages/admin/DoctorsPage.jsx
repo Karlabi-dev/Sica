@@ -15,7 +15,7 @@ export default function DoctorsPage(){
  const api=useCallback(async(path,options={})=>{
   if(!auth.currentUser) throw new Error("Entre como administrador.");
   const token=await auth.currentUser.getIdToken();
-  const response=await fetch(API+path,{...options,cache:"no-store",headers:{"Authorization":"Bearer "+token,"X-Admin-Session":sessionStorage.getItem("sica_admin_session")??"","Content-Type":"application/json",...(options.headers??{})}});
+  const response=await fetch(API+path,{...options,cache:"no-store",headers:{"Authorization":"Bearer "+token,"X-Admin-Session":getAdminSession(auth.currentUser.uid),"Content-Type":"application/json",...(options.headers??{})}});
   const body=await response.json().catch(()=>({}));
   if(!response.ok) throw new Error(body.error??"Operação não autorizada");
   return body;
