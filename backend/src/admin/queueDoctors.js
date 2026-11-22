@@ -39,3 +39,25 @@ export async function updateQueueDoctors(req,res){
   await client.query("COMMIT");return res.json({id,doctorIds});
  }catch(e){await client.query("ROLLBACK").catch(()=>{});console.error("Queue membership failed",{code:e.code??"UNKNOWN"});return res.status(503).json({error:"Não foi possível atualizar os médicos da fila"});}finally{client.release();}
 }
+
+export async function changeQueueStatus(req,res){
+ res.set("Cache-Control","no-store");
+ if(req.staff?.role!=="admin")return res.status(403).json({error:"Somente administradores"});
+ if(!uuid(req.params.id)||typeof req.body?.active!=="boolean")return res.status(400).json({error:"Dados inválidos"});
+ const client=await getPool().connect();
+ try{
+  await client.query("BEGIN");
+  const q=await client.query("SELECT id,active,specialty_id FROM public.queue_definitions WHERE id=$1 FOR UPDATE",[req.params.id]);
+  if(!q.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Fila não encontrada"});}
+  if(!req.body.active){
+   const pending=await client.query("SELECT 1 FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id WHERE qs.definition_id=$1 AND e.status IN ('waiting','called','in_service') LIMIT 1",[req.params.id]);
+   if(pending.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Não é possível desativar a fila enquanto houver pacientes aguardando, chamados ou em atendimento."});}
+  }else{
+   const s=await client.query("SELECT 1 FROM public.specialties WHERE id=$1 AND active=true",[q.rows[0].specialty_id]);
+   if(!s.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Ative a especialidade antes de ativar a fila."});}
+  }
+  await client.query("UPDATE public.queue_definitions SET active=$2 WHERE id=$1",[req.params.id,req.body.active]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'queue.status.updated','queue_definition',$2,$3::jsonb)",[req.staff.id,req.params.id,JSON.stringify({active:req.body.active})]);
+  await client.query("COMMIT");return res.json({id:req.params.id,active:req.body.active});
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});console.error("Queue status error",{code:e.code??"UNKNOWN"});return res.status(503).json({error:"Não foi possível atualizar a fila"});}finally{client.release();}
+}
