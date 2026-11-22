@@ -12,7 +12,7 @@ import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, r
 
 import { adminAttendance, adminAttendanceTracking } from "./admin/attendance.js";
 import { adminPatients, adminPatientJourney, adminAudit, adminCatalog, adminCatalogWrite, adminCatalogDelete, adminSeedSpecialties, adminQueuesWrite } from "./admin/management.js";
-import { updateQueueDoctors } from "./admin/queueDoctors.js";
+import { updateQueueDoctors, changeQueueStatus } from "./admin/queueDoctors.js";
 import { medicalOverview, medicalAction } from "./medical/operations.js";
 import { doctorCatalog, createDoctor, updateDoctor, deleteDoctor } from "./admin/doctors.js";
 import { requestDevice, deviceStatus, operationalAuth, listDevices, approveDevice, revokeDevice } from "./devices/access.js";
@@ -70,6 +70,7 @@ app.get("/admin/catalog",staffAuth,adminCatalog);
 app.post("/admin/catalog/specialties/seed",staffAuth,adminSeedSpecialties);
 app.post("/admin/catalog/queues",staffAuth,adminQueuesWrite);
 app.patch("/admin/catalog/queues/:id/doctors",staffAuth,updateQueueDoctors);
+app.patch("/admin/catalog/queues/:id/status",staffAuth,changeQueueStatus);
 app.post("/admin/catalog/:kind",staffAuth,adminCatalogWrite);
 app.patch("/admin/catalog/:kind/:id",staffAuth,adminCatalogWrite);
 app.delete("/admin/catalog/:kind/:id",staffAuth,adminCatalogDelete);
