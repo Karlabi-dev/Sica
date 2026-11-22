@@ -13,7 +13,7 @@ export default function DevicesPage(){
   const user=auth.currentUser;
   if(!user) throw new Error("Entre como administrador");
   const token=await user.getIdToken();
-  const response=await fetch(API+path,{...options,headers:{Authorization:"Bearer "+token,"X-Admin-Session":sessionStorage.getItem("sica_admin_session")??"",...(options.headers??{})},cache:"no-store"});
+  const response=await fetch(API+path,{...options,headers:{Authorization:"Bearer "+token,"X-Admin-Session":getAdminSession(user.uid),...(options.headers??{})},cache:"no-store"});
   const body=await response.json().catch(()=>({}));
   if(!response.ok) throw new Error(body.error??"Operação não autorizada");
   return body;
