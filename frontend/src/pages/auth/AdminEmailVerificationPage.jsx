@@ -1,3 +1,4 @@
+import { saveAdminSession, clearAdminSession } from "../../services/adminSession.js";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, sendEmailVerification, signOut } from "firebase/auth";
 import { Link, useNavigate } from "react-router-dom";
@@ -62,7 +63,7 @@ export default function AdminEmailVerificationPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Código inválido ou expirado.");
       if (!data.token) throw new Error("Sessão administrativa não recebida.");
-      sessionStorage.setItem("sica_admin_session", data.token);
+      saveAdminSession(data.token,user.uid,data.expiresInSeconds);
       setVerified(true); setCode("");
       navigate("/admin", { replace: true });
 
@@ -86,7 +87,7 @@ export default function AdminEmailVerificationPage() {
       <button className="admin-otp-primary" disabled={busy || code.length !== 6} type="submit">Verificar código</button>
     </form>}
     {message && <p className={verified ? "admin-otp-success" : "admin-otp-message"} role="status">{message}</p>}
-    <p className="admin-otp-note">Esta sessão dura até 12 horas. A opção de confiar neste dispositivo será implementada separadamente.</p>
-    <button className="admin-otp-exit" onClick={async()=>{sessionStorage.removeItem("sica_admin_session");await signOut(auth);navigate("/login",{replace:true});}}>Sair e voltar ao login</button>
+    <p className="admin-otp-note">A verificação ficará válida neste navegador por até 12 horas. Ao sair, a sessão será encerrada.</p>
+    <button className="admin-otp-exit" onClick={async()=>{clearAdminSession();await signOut(auth);navigate("/login",{replace:true});}}>Sair e voltar ao login</button>
   </section></main>;
 }
