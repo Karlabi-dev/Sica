@@ -34,18 +34,18 @@ export default function DoctorsPage(){
   }catch(err){setError(err.message);}finally{setBusy(false);}
  }
  return <main className="admin-page">
-  <div className="admin-page-heading"><div><p className="admin-eyebrow">EQUIPE CLÍNICA</p><h1>Cadastro de médicos</h1><p>Cadastre o profissional, vincule seu consultório e escolha a fila de atendimento.</p></div><button className="admin-primary" onClick={refresh}>Atualizar</button></div>
+  <div className="admin-page-heading"><div><p className="admin-eyebrow">EQUIPE CLÍNICA</p><h1>Cadastro de médicos</h1><p>Cadastre o profissional e seu consultório. O vínculo com filas é feito no menu Filas e equipes.</p></div><button className="admin-primary" onClick={refresh}>Atualizar</button></div>
   {error&&<p className="admin-form-notice" role="alert">{error}</p>}
   {notice&&<p className="admin-form-notice" role="status">{notice}</p>}
   <section className="admin-panel admin-settings"><h2>{editing?"Editar médico":"Novo médico"}</h2>
    <form onSubmit={save}>
     <label>Nome completo do médico<input required minLength={3} maxLength={160} value={form.name} onChange={e=>change("name",e.target.value)} placeholder="Ex.: Dra. Maria Silva"/></label>
     <label>Consultório<select required value={form.roomId} onChange={e=>change("roomId",e.target.value)}><option value="">Selecione um consultório</option>{data.rooms.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-    <label>Fila / especialidade<select required value={form.queueId} onChange={e=>change("queueId",e.target.value)}><option value="">Selecione uma fila</option>{data.queues.map(q=><option key={q.id} value={q.id}>{q.name} — {q.queue_mode==="shared"?"Compartilhada":"Individual"}</option>)}</select></label>
+    
     <label>Especialidade<select value={form.specialtyId} onChange={e=>change("specialtyId",e.target.value)}><option value="">Selecione a especialidade</option>{data.specialties?.filter(s=>s.active).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     <h3>Horários de trabalho</h3>{form.schedule.map((slot,i)=><div key={i} style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"end"}}><label>Dia<select value={slot.weekday} onChange={e=>change("schedule",form.schedule.map((x,j)=>j===i?{...x,weekday:Number(e.target.value)}:x))}>{["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"].map((day,d)=><option key={d} value={d}>{day}</option>)}</select></label><label>Início<input type="time" required value={slot.start} onChange={e=>change("schedule",form.schedule.map((x,j)=>j===i?{...x,start:e.target.value}:x))}/></label><label>Fim<input type="time" required value={slot.end} onChange={e=>change("schedule",form.schedule.map((x,j)=>j===i?{...x,end:e.target.value}:x))}/></label><button type="button" onClick={()=>change("schedule",form.schedule.filter((_,j)=>j!==i))}>Remover</button></div>)}<button type="button" className="admin-secondary" onClick={()=>change("schedule",[...form.schedule,{weekday:1,start:"08:00",end:"12:00"}])}>+ Adicionar horário</button>
     {editing&&<label><input type="checkbox" checked={form.active} onChange={e=>change("active",e.target.checked)}/> Médico ativo</label>}
-    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}><button className="admin-primary" disabled={busy||!form.roomId||!form.queueId}>{busy?"Salvando...":editing?"Salvar alterações":"Cadastrar médico"}</button>{editing&&<button type="button" className="admin-secondary" onClick={reset}>Cancelar edição</button>}</div>
+    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}><button className="admin-primary" disabled={busy||!form.roomId}>{busy?"Salvando...":editing?"Salvar alterações":"Cadastrar médico"}</button>{editing&&<button type="button" className="admin-secondary" onClick={reset}>Cancelar edição</button>}</div>
    </form>
    <p className="admin-section-note">O cadastro não autoriza automaticamente o acesso. O administrador também precisa aprovar o dispositivo do consultório. Uma fila compartilhada aceita vários médicos; uma individual, apenas um.</p>
   </section>
