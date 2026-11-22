@@ -81,6 +81,21 @@ export async function adminCatalogWrite(req,res){
   await client.query("COMMIT");return res.json({id:result.rows[0].id});
  }catch(e){await client.query("ROLLBACK").catch(()=>{});if(e.code==="23505")return res.status(409).json({error:"Já existe um registro com este nome"});return fail(res,e);}finally{client.release();}
 }
+export async function adminSeedSpecialties(req,res){
+ res.set("Cache-Control","no-store");if(!admin(req,res))return;
+ const names=["Clínica Geral","Pediatria","Cardiologia","Dermatologia","Ginecologia","Ortopedia e Traumatologia","Neurologia","Oftalmologia","Endocrinologia","Psiquiatria"];
+ const client=await getPool().connect();
+ try{
+  await client.query("BEGIN");
+  const result=await client.query(`INSERT INTO public.specialties(name,active)
+   SELECT n,true FROM unnest($1::text[]) AS n
+   WHERE NOT EXISTS(SELECT 1 FROM public.specialties s WHERE lower(trim(s.name))=lower(trim(n)))
+   ON CONFLICT(name) DO NOTHING RETURNING id`,[names]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,metadata) VALUES($1,'specialties.seeded','specialties',$2::jsonb)",[req.staff.id,JSON.stringify({created:result.rowCount})]);
+  await client.query("COMMIT");
+  return res.json({created:result.rowCount,total:names.length});
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});return fail(res,e);}finally{client.release();}
+}
 export async function adminCatalogDelete(req,res){
  res.set("Cache-Control","no-store");if(!admin(req,res))return;
  const {kind,id}=req.params;
