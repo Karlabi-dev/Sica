@@ -32,7 +32,7 @@ export async function deviceAuth(req,res,next) {
  try {
   const {rows}=await getPool().query(`SELECT d.id,d.name,d.role,d.staff_user_id,r.name AS room_name
    FROM public.authorized_devices d LEFT JOIN public.rooms r ON r.id=d.room_id
-   WHERE d.device_token_hash=$1 AND d.status='active'`,[hash(token)]);
+   JOIN public.staff_users su ON su.id=d.staff_user_id\n   WHERE d.device_token_hash=$1 AND d.status='active' AND su.active=true AND su.role=d.role`,[hash(token)]);
   if(!rows.length) return res.status(403).json({error:"Dispositivo aguardando aprovação ou revogado"});
   req.staff={id:rows[0].staff_user_id,role:rows[0].role,displayName:rows[0].name};
   req.device=rows[0];
