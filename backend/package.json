@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/config/database.js && node --check src/auth/firebaseAdmin.js && node --check src/auth/adminEmailChallenge.js"
+    "check": "node --check src/server.js && node --check src/config/database.js && node --check src/auth/firebaseAdmin.js && node --check src/auth/adminEmailChallenge.js && node --check src/kiosk/tickets.js"
   },
   "engines": {
     "node": ">=22"
