@@ -3,7 +3,15 @@ import { getPool } from "../config/database.js";
 const hash = token => createHash("sha256").update(token).digest("hex");
 const tokenFrom = req => (req.get("x-device-token") ?? "").trim();
 const validToken = token => /^[a-f0-9]{64}$/.test(token);
-const failure = (res,err) => {console.error("Device access failed",{code:err.code??"UNKNOWN"});return res.status(503).json({error:"Serviço de dispositivos indisponível"});};
+const failure = (res,err) => {
+ const code=err.code??"UNKNOWN";
+ console.error("Device access failed",{code,message:err.message});
+ if(code==="42P01")return res.status(503).json({error:"Tabela de dispositivos ausente no Neon. Verifique as migrações do banco.",code});
+ if(code==="42703")return res.status(503).json({error:"Estrutura da tabela de dispositivos desatualizada no Neon.",code});
+ if(code==="23514")return res.status(409).json({error:"A função ou situação do computador não é permitida pela configuração atual do banco.",code});
+ if(code==="23505")return res.status(409).json({error:"Já existe um vínculo para este computador. Atualize a lista e tente novamente.",code});
+ return res.status(503).json({error:"Serviço de dispositivos indisponível. Consulte os logs do backend no Render.",code});
+};
 export async function requestDevice(req,res) {
  res.set("Cache-Control","no-store");
  const existing=tokenFrom(req);
