@@ -1,84 +1,114 @@
-import { useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
-import './KioskPage.css';
+import { useEffect, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import "./KioskPage.css";
 
 const OPTIONS = [
-  { id: 'convenio', number: '01', title: 'Convênio', description: 'Atendimento pelo seu plano de saúde', prefix: 'C', demo: 'C024' },
-  { id: 'convenio-prioridade', number: '02', title: 'Convênio Prioridade', description: 'Atendimento prioritário por convênio', prefix: 'CP', demo: 'CP008' },
-  { id: 'particular', number: '03', title: 'Particular', description: 'Atendimento particular', prefix: 'P', demo: 'P016' },
-  { id: 'particular-prioridade', number: '04', title: 'Particular Prioridade', description: 'Atendimento prioritário particular', prefix: 'PP', demo: 'PP003' },
+  { id: "particular", number: "01", title: "Particular", description: "Atendimento sem convênio, com pagamento particular.", prefix: "P", demo: "P016", color: "orange" },
+  { id: "particular-prioridade", number: "02", title: "Particular Prioridade", description: "Atendimento particular com direito à prioridade.", prefix: "PP", demo: "PP003", color: "red" },
+  { id: "convenio", number: "03", title: "Convênio", description: "Atendimento por plano de saúde ou convênio.", prefix: "C", demo: "C024", color: "light-blue" },
+  { id: "convenio-prioridade", number: "04", title: "Convênio Prioridade", description: "Atendimento por convênio com direito à prioridade.", prefix: "CP", demo: "CP008", color: "dark-blue" },
 ];
 
 function Brand() {
-  return <div className="kiosk-brand" aria-label="SICA — Sistema Inteligente de Controle de Atendimento">
+  return <div className="kiosk-brand" aria-label="SICA — Sistema de Controle de Atendimento">
     <span className="kiosk-symbol" aria-hidden="true">S</span>
     <div><strong>SICA</strong><small>SISTEMA DE CONTROLE DE ATENDIMENTO</small></div>
   </div>;
 }
 
-function KioskHeader() {
-  return <header className="kiosk-header"><Brand /><span className="kiosk-header-label">AUTOATENDIMENTO</span></header>;
-}
-
 export default function KioskPage() {
-  const [step, setStep] = useState('choose');
   const [choice, setChoice] = useState(null);
-  const trackingUrl = typeof window === 'undefined' ? '/acompanhar/demo' : new URL('/acompanhar/' + (choice?.demo || 'C024'), window.location.origin).href;
-
-  function selectOption(option) {
-    setChoice(option);
-    setStep('issued');
-  }
-
-  function printTicket() {
-    setStep('printed');
-    // A janela de impressão só é aberta por ação explícita do usuário.
-    // A impressão automática via impressora térmica exigirá integração própria.
-    window.setTimeout(() => window.print(), 100);
-  }
+  const [phase, setPhase] = useState("choose");
+  const [notice, setNotice] = useState("");
+  const resetTimer = useRef(null);
+  const printTimer = useRef(null);
+  const printing = useRef(false);
+  const choiceRef = useRef(null);
 
   function reset() {
-    setStep('choose');
+    if (resetTimer.current) window.clearTimeout(resetTimer.current);
+    if (printTimer.current) window.clearTimeout(printTimer.current);
+    printing.current = false;
+    choiceRef.current = null;
     setChoice(null);
+    setPhase("choose");
   }
+
+  useEffect(() => {
+    const afterPrint = () => {
+      if (!printing.current) return;
+      if (printTimer.current) window.clearTimeout(printTimer.current);
+      setPhase("done");
+      resetTimer.current = window.setTimeout(reset, 1200);
+    };
+    window.addEventListener("afterprint", afterPrint);
+    return () => {
+      window.removeEventListener("afterprint", afterPrint);
+      if (resetTimer.current) window.clearTimeout(resetTimer.current);
+      if (printTimer.current) window.clearTimeout(printTimer.current);
+    };
+  }, []);
+
+  function selectOption(option) {
+    if (printing.current || phase !== "choose") return;
+    printing.current = true;
+    choiceRef.current = option;
+    setNotice("");
+    setChoice(option);
+    setPhase("printing");
+  }
+
+  useEffect(() => {
+    if (phase !== "printing" || !choice) return;
+    const frame = window.requestAnimationFrame(() => {
+      printTimer.current = window.setTimeout(() => {
+        try {
+          window.print();
+        } catch {
+          printing.current = false;
+          setPhase("error");
+          setNotice("Não foi possível abrir a impressão. Tente novamente.");
+        }
+      }, 250);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [phase, choice]);
+
+  const trackingUrl = typeof window === "undefined" ? "/acompanhar/demo" : new URL("/acompanhar/" + (choice?.demo || "demo"), window.location.origin).href;
 
   return <div className="kiosk-page">
     <div className="kiosk-screen">
-      <KioskHeader />
-      {step === 'choose' ? (
-        <main className="kiosk-main kiosk-main--choose">
-          <p className="kiosk-overline">BEM-VINDO(A) À CLÍNICA</p>
-          <h1>Como será seu<br />atendimento?</h1>
-          <p className="kiosk-intro">Toque em uma opção para retirar sua senha.</p>
-          <div className="kiosk-options">
-            {OPTIONS.map(option => <button type="button" className="kiosk-option" key={option.id} onClick={() => selectOption(option)}>
-              <span className="kiosk-option-top"><span>{option.number}</span><span aria-hidden="true">↗</span></span>
-              <strong>{option.title}</strong>
-              <small>{option.description}</small>
-            </button>)}
-          </div>
-          <aside className="kiosk-notice"><strong>Atendimento prioritário</strong><span>Selecione “Prioridade” se você tem direito ao atendimento preferencial.</span></aside>
-        </main>
-      ) : (
-        <main className="kiosk-main kiosk-main--ticket">
-          <p className="kiosk-overline">{step === 'issued' ? 'SENHA GERADA COM SUCESSO' : 'SENHA PRONTA'}</p>
-          <h1>{step === 'issued' ? 'Sua senha foi emitida' : 'Tudo pronto para aguardar'}</h1>
-          <p className="kiosk-intro">{step === 'issued' ? 'Guarde sua senha e acompanhe seu atendimento.' : 'Retire seu comprovante e aguarde sua chamada.'}</p>
-          <section className="kiosk-ticket" aria-label="Comprovante de senha">
-            <span className="kiosk-ticket-label">SENHA DE ATENDIMENTO</span>
-            <strong className="kiosk-ticket-number">{choice.demo}</strong>
-            <span className="kiosk-ticket-category">{choice.title}</span>
-            <span className="kiosk-ticket-destination">Recepção</span>
-            <div className="kiosk-qr"><QRCodeSVG value={trackingUrl} size={150} level="M" marginSize={1} title="QR Code de demonstração do acompanhamento" /></div>
-            <strong className="kiosk-track-title">Acompanhe pelo celular</strong>
-            <p className="kiosk-track-description">Aponte a câmera para o QR Code para visualizar sua fila.</p>
-          </section>
-          {step === 'issued' ? <button className="kiosk-primary" type="button" onClick={printTicket}>Imprimir comprovante</button> : <div className="kiosk-success" role="status">✓ Comprovante preparado para impressão</div>}
-          <p className="kiosk-helper">Aguarde sua senha ser chamada na recepção.<br />Você também pode acompanhar pelo painel da clínica.</p>
-          {step === 'printed' && <button type="button" className="kiosk-secondary" onClick={reset}>Novo atendimento</button>}
-        </main>
-      )}
-      <footer className="kiosk-footer">SICA • Atendimento organizado para você <span>Protótipo demonstrativo — não emite senhas reais</span></footer>
+      <header className="kiosk-header"><Brand /><span className="kiosk-header-label">AUTOATENDIMENTO</span></header>
+      <main className="kiosk-main kiosk-main--choose">
+        <p className="kiosk-overline">BEM-VINDO(A) À CLÍNICA</p>
+        <h1>Como será seu atendimento?</h1>
+        <p className="kiosk-intro">Toque na opção desejada para imprimir sua senha.</p>
+        <div className="kiosk-options">
+          {OPTIONS.map(option => <button type="button" className={`kiosk-option kiosk-option--${option.color}`} key={option.id} onClick={() => selectOption(option)} disabled={phase !== "choose"}>
+            <span className="kiosk-option-accent" aria-hidden="true" />
+            <span className="kiosk-option-number">{option.number}</span>
+            <span className="kiosk-option-content"><strong>{option.title}</strong><small>{option.description}</small></span>
+            <span className="kiosk-option-arrow" aria-hidden="true">›</span>
+          </button>)}
+        </div>
+        <p className="kiosk-priority-note">Tem direito ao atendimento prioritário? Escolha uma das opções com “Prioridade”.</p>
+        {phase !== "choose" && <div className="kiosk-status" role="status" aria-live="polite">
+          <div className="kiosk-status-spinner" aria-hidden="true" />
+          <strong>{phase === "printing" ? "Preparando impressão..." : phase === "done" ? "Retire seu comprovante!" : "Impressão não iniciada"}</strong>
+          <span>{phase === "printing" ? "Aguarde a janela de impressão." : phase === "done" ? "Voltando ao início..." : notice}</span>
+          {phase === "error" && <button type="button" onClick={reset}>Voltar ao início</button>}
+        </div>}
+      </main>
+      {choice && <section className="kiosk-print-only" aria-label="Comprovante para impressão">
+        <div className="kiosk-print-brand">SICA</div>
+        <p>SENHA DE ATENDIMENTO</p>
+        <strong className="kiosk-print-number">{choice.demo}</strong>
+        <strong>{choice.title}</strong>
+        <p>Dirija-se à recepção e aguarde sua chamada.</p>
+        <QRCodeSVG value={trackingUrl} size={168} level="M" marginSize={1} title="QR Code para acompanhamento" />
+        <small>Escaneie para acompanhar sua senha</small>
+        <small>PROTÓTIPO — SENHA DE DEMONSTRAÇÃO</small>
+      </section>}
     </div>
   </div>;
 }
