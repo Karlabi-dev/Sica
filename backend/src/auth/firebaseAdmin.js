@@ -37,14 +37,6 @@ export async function staffAuth(req, res, next) {
     });
   }
   try {
-    const connectionInfo = await getPool().query(`
-      SELECT
-        current_database() AS banco,
-        current_schema() AS esquema,
-        to_regclass('public.staff_users') AS tabela
-    `);
-
-    console.log("Conexão real do backend:", connectionInfo.rows[0]);
     const { rows } = await getPool().query(
       `SELECT id, display_name, role, active, mfa_required
        FROM public.staff_users
