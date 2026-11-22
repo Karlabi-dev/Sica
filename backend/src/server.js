@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { checkDatabase, closeDatabase } from "./config/database.js";
 import { staffAuth } from "./auth/firebaseAdmin.js";
 import { revokeAdminSession } from "./auth/adminEmailSession.js";
+import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js";
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
 
 const app = express();
@@ -44,6 +45,10 @@ app.get("/ready", async (_req, res) => {
     res.status(503).json({ status: "unavailable" });
   }
 });
+
+app.get("/public/clinic", clinicPublic);
+app.post("/public/kiosk/tickets", issueKioskTicket);
+app.get("/public/track/:token", trackTicket);
 
 app.post("/auth/admin/email-code/request", requestAdminEmailCode);
 app.post("/auth/admin/email-code/verify", verifyAdminEmailCode);
