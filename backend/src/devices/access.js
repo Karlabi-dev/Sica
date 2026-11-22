@@ -93,7 +93,7 @@ export async function revokeDevice(req,res) {
   const {rows}=await client.query("SELECT staff_user_id FROM public.authorized_devices WHERE id=$1 FOR UPDATE",[req.params.id]);
   if(!rows.length){await client.query("ROLLBACK");return res.status(404).json({error:"Dispositivo não encontrado"});}
   await client.query("UPDATE public.authorized_devices SET status='revoked' WHERE id=$1",[req.params.id]);
-  if(rows[0].staff_user_id) await client.query("UPDATE public.staff_users SET active=false WHERE id=$1",[rows[0].staff_user_id]);
+  if(rows[0].staff_user_id) await client.query("UPDATE public.staff_users SET active=false WHERE id=$1 AND firebase_uid LIKE 'device:%'",[rows[0].staff_user_id]);
   await client.query("COMMIT");
   return res.json({status:"revoked"});
  }catch(err){await client.query("ROLLBACK").catch(()=>{});return failure(res,err);}finally{client.release();}
