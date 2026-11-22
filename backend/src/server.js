@@ -7,6 +7,7 @@ import { staffAuth } from "./auth/firebaseAdmin.js";
 import { revokeAdminSession } from "./auth/adminEmailSession.js";
 import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js";
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
+import { receptionOverview, receptionCall, receptionArrival } from "./reception/operations.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -49,6 +50,9 @@ app.get("/ready", async (_req, res) => {
 app.get("/public/clinic", clinicPublic);
 app.post("/public/kiosk/tickets", issueKioskTicket);
 app.get("/public/track/:token", trackTicket);
+app.get("/staff/reception/overview", staffAuth, receptionOverview);
+app.post("/staff/reception/entries/:entryId/call", staffAuth, receptionCall);
+app.post("/staff/reception/entries/:entryId/arrival", staffAuth, receptionArrival);
 
 app.post("/auth/admin/email-code/request", requestAdminEmailCode);
 app.post("/auth/admin/email-code/verify", verifyAdminEmailCode);
