@@ -4,9 +4,8 @@ import { getPool } from "../config/database.js";
 const uuid = v => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const forbidden = (req,res) => req.staff?.role !== "admin" ? (res.status(403).json({error:"Somente administradores"}),true) : false;
 const validSchedule = schedule => Array.isArray(schedule)&&schedule.length<=21&&schedule.every(x=>Number.isInteger(x.weekday)&&x.weekday>=0&&x.weekday<=6&&/^([01]\d|2[0-3]):[0-5]\d$/.test(x.start)&&/^([01]\d|2[0-3]):[0-5]\d$/.test(x.end)&&x.end>x.start);
-async function saveSchedule(client,id,specialtyId,schedule){
+async function saveSchedule(client,id,schedule){
  if(!validSchedule(schedule))throw Object.assign(new Error("Invalid schedule"),{code:"SCHEDULE"});
- if(specialtyId){if(!uuid(specialtyId))throw Object.assign(new Error("Invalid specialty"),{code:"SCHEDULE"});await client.query("INSERT INTO public.professional_specialties(staff_user_id,specialty_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[id,specialtyId]);}
  await client.query("DELETE FROM public.professional_availability WHERE staff_user_id=$1",[id]);
  for(const slot of schedule)await client.query("INSERT INTO public.professional_availability(staff_user_id,weekday,start_time,end_time) VALUES($1,$2,$3,$4)",[id,slot.weekday,slot.start,slot.end]);
 }
@@ -36,44 +35,38 @@ export async function doctorCatalog(req,res) {
 export async function createDoctor(req,res) {
  res.set("Cache-Control","no-store");
  if(forbidden(req,res)) return;
- const {name,roomId,specialtyId,schedule=[]}=req.body??{};
- if(typeof name!=="string"||name.trim().length<3||name.trim().length>160||!uuid(roomId))
-  return res.status(400).json({error:"Informe nome e consultório válidos"});
+ const {name,schedule=[]}=req.body??{};
+ if(typeof name!=="string"||name.trim().length<3||name.trim().length>160)
+  return res.status(400).json({error:"Informe um nome válido"});
  const client=await getPool().connect();
  try {
   await client.query("BEGIN");
-  const room=await client.query("SELECT id FROM public.rooms WHERE id=$1 AND active=true",[roomId]);
-  if(!room.rowCount){await client.query("ROLLBACK");return res.status(400).json({error:"Consultório indisponível"});}
   const uid="provisioned:sica:"+randomUUID();
   const s=await client.query(`INSERT INTO public.staff_users(firebase_uid,display_name,role,active)
    VALUES($1,$2,'doctor',true) RETURNING id`,[uid,name.trim()]);
   await client.query(`INSERT INTO public.doctor_profiles(staff_user_id,room_id,queue_definition_id)
-   VALUES($1,$2,NULL)`,[s.rows[0].id,roomId]);
-  await saveSchedule(client,s.rows[0].id,specialtyId,schedule);
+   VALUES($1,NULL,NULL)`,[s.rows[0].id]);
+  await saveSchedule(client,s.rows[0].id,schedule);
   await client.query(`INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id)
    VALUES($1,'doctor.created','staff_user',$2)`,[req.staff.id,s.rows[0].id]);
   await client.query("COMMIT");
   return res.status(201).json({id:s.rows[0].id});
- }catch(e){await client.query("ROLLBACK").catch(()=>{});if(e.code==="SCHEDULE")return res.status(400).json({error:"Horários ou especialidade inválidos"});if(e.code==="23505")return res.status(409).json({error:e.constraint==="uq_doctor_profile_room"?"Este consultório já está ocupado por outro médico ativo. Escolha outro consultório ou desative o vínculo anterior.":"Já existe um cadastro com esses dados. Verifique os vínculos de consultório e fila."});return fail(res,e);}finally{client.release();}
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});if(e.code==="SCHEDULE")return res.status(400).json({error:"Horários inválidos"});if(e.code==="23505")return res.status(409).json({error:e.constraint==="uq_doctor_profile_room"?"Este consultório já está ocupado por outro médico ativo. Escolha outro consultório ou desative o vínculo anterior.":"Já existe um cadastro com esses dados. Verifique os vínculos de consultório e fila."});return fail(res,e);}finally{client.release();}
 }
 
 export async function updateDoctor(req,res) {
  res.set("Cache-Control","no-store");
  if(forbidden(req,res)) return;
- const {name,roomId,active,specialtyId,schedule=[]}=req.body??{};
- if(!uuid(req.params.id)||typeof name!=="string"||name.trim().length<3||name.trim().length>160||!uuid(roomId)||typeof active!=="boolean")
+ const {name,active,schedule=[]}=req.body??{};
+ if(!uuid(req.params.id)||typeof name!=="string"||name.trim().length<3||name.trim().length>160||typeof active!=="boolean")
   return res.status(400).json({error:"Dados do médico inválidos"});
  const client=await getPool().connect();
  try {
   await client.query("BEGIN");
-  const room=await client.query("SELECT id FROM public.rooms WHERE id=$1 AND active=true",[roomId]);
-  if(!room.rowCount){await client.query("ROLLBACK");return res.status(400).json({error:"Consultório indisponível"});}
   const s=await client.query("UPDATE public.staff_users SET display_name=$2,active=$3,updated_at=now() WHERE id=$1 AND role='doctor' RETURNING id",[req.params.id,name.trim(),active]);
   if(!s.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Médico não encontrado"});}
-  await client.query(`INSERT INTO public.doctor_profiles(staff_user_id,room_id,queue_definition_id,enabled)
-   VALUES($1,$2,(SELECT queue_definition_id FROM public.doctor_profiles WHERE staff_user_id=$1),$3) ON CONFLICT(staff_user_id) DO UPDATE
-   SET room_id=EXCLUDED.room_id,enabled=EXCLUDED.enabled,updated_at=now()`,[req.params.id,roomId,active]);
-  await saveSchedule(client,req.params.id,specialtyId,schedule);
+  await client.query("UPDATE public.doctor_profiles SET enabled=$2,updated_at=now() WHERE staff_user_id=$1",[req.params.id,active]);
+  await saveSchedule(client,req.params.id,schedule);
   if(!active) await client.query("UPDATE public.authorized_devices SET status='revoked' WHERE staff_user_id=$1 AND status='active'",[req.params.id]);
   await client.query(`INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id)
    VALUES($1,'doctor.updated','staff_user',$2)`,[req.staff.id,req.params.id]);
