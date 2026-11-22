@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getDemoRows, SECTION_META } from "./adminDemoData.js";
+import DevicesPage from "./DevicesPage.jsx";
 import "./AdminPage.css";
 import "./AdminSectionPage.css";
 
@@ -16,6 +17,12 @@ function Settings() {
 }
 
 export default function AdminSectionPage() {
+  const { section: currentSection } = useParams();
+  if(currentSection==="dispositivos") return <DevicesPage/>;
+  return <DemoSectionPage/>;
+}
+
+function DemoSectionPage() {
   const { section } = useParams();
   const meta = SECTION_META[section];
   const [edits, setEdits] = useState({});
