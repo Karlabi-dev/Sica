@@ -1,91 +1,78 @@
-import { useMemo, useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
-import './AttendantPage.css';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { auth } from "../../services/firebase.js";
+import "./AttendantPage.css";
 
-const START = [
-  { id: 1, ticket: 'C024', name: 'Ana Martins', category: 'Convênio', priority: false, status: 'Aguardando', destination: 'Clínica geral' },
-  { id: 2, ticket: 'P016', name: 'Carlos Oliveira', category: 'Particular', priority: false, status: 'Aguardando', destination: 'Clínica geral' },
-  { id: 3, ticket: 'CP008', name: 'Maria Santos', category: 'Convênio', priority: true, status: 'Aguardando', destination: 'Cardiologia' },
-  { id: 4, ticket: 'PP003', name: 'João Pereira', category: 'Particular', priority: true, status: 'Aguardando', destination: 'Clínica geral' },
-  { id: 5, ticket: 'C025', name: 'Fernanda Lima', category: 'Convênio', priority: false, status: 'Aguardando', destination: 'Pediatria' }
-];
-const TABS = [{ id: 'dashboard', label: 'Visão geral' }, { id: 'fila', label: 'Fila de espera' }, { id: 'atendimento', label: 'Atendimento' }, { id: 'pacientes', label: 'Pacientes' }];
-const statusClass = status => status === 'Aguardando' ? 'waiting' : status === 'Em atendimento' ? 'active' : 'done';
+const API = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
+const statusLabels = {waiting:"Aguardando",called:"Chamado",in_service:"No balcão",no_show:"Não compareceu",transferred:"Encaminhado"};
+const label = stage => ({reception:"Recepção",consultation:"Consulta",triage:"Triagem",exam:"Exames"})[stage] ?? stage;
 
 export default function AttendantPage() {
-  const [patients, setPatients] = useState(START);
-  const [tab, setTab] = useState('dashboard');
-  const [search, setSearch] = useState('');
-  const [currentId, setCurrentId] = useState(null);
-  const [modal, setModal] = useState(null);
-  const [destination, setDestination] = useState('Clínica geral');
-  const [notice, setNotice] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newCategory, setNewCategory] = useState('Convênio');
-  const [newPriority, setNewPriority] = useState(false);
-  const current = patients.find(p => p.id === currentId) || null;
-  const waiting = patients.filter(p => p.status === 'Aguardando');
-  const completed = patients.filter(p => p.status === 'Encaminhado');
-  const filtered = useMemo(() => patients.filter(p => [p.name, p.ticket, p.category].some(v => v.toLowerCase().includes(search.toLowerCase()))), [patients, search]);
-  const trackingUrl = current && typeof window !== 'undefined' ? new URL('/acompanhar/' + current.ticket, window.location.origin).href : '';
+  const [data,setData]=useState({queues:[],entries:[]});
+  const [tab,setTab]=useState("dashboard");
+  const [selectedQueue,setSelectedQueue]=useState(null);
+  const [selected,setSelected]=useState(null);
+  const [search,setSearch]=useState("");
+  const [notice,setNotice]=useState("");
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [loading,setLoading]=useState(true);
 
-  function showNotice(message) { setNotice(message); }
-  function callNext() {
-    const next = [...waiting].sort((a, b) => Number(b.priority) - Number(a.priority) || a.id - b.id)[0];
-    if (!next) return showNotice('Não há senhas aguardando.');
-    setPatients(list => list.map(p => p.id === next.id ? { ...p, status: 'Em atendimento' } : p));
-    setCurrentId(next.id);
-    setTab('atendimento');
-    showNotice('Senha ' + next.ticket + ' chamada para a recepção.');
+  const api=useCallback(async (path,options={})=>{
+    const user=auth.currentUser;
+    if (!user) throw new Error("Entre com uma conta autorizada pela clínica.");
+    const token=await user.getIdToken();
+    const response=await fetch(`${API}${path}`,{...options,headers:{Authorization:`Bearer ${token}`,"X-Admin-Session":sessionStorage.getItem("sica_admin_session")??"",...(options.headers??{})},cache:"no-store"});
+    const body=await response.json().catch(()=>({}));
+    if (!response.ok) throw new Error(body.error??"Não foi possível concluir a operação.");
+    return body;
+  },[]);
+  const refresh=useCallback(async ()=>{
+    try { const result=await api("/staff/reception/overview");setData(result);setError(""); }
+    catch(err){setError(err.message);}
+    finally {setLoading(false);}
+  },[api]);
+  useEffect(()=>{refresh();const id=setInterval(refresh,8000);return()=>clearInterval(id);},[refresh]);
+
+  const waiting=data.entries.filter(e=>e.status==="waiting"&&e.stage_type==="reception");
+  const active=data.entries.filter(e=>e.status==="called"||e.status==="in_service");
+  const current=data.entries.find(e=>e.id===selected)??active.find(e=>e.stage_type==="reception")??null;
+  const filtered=useMemo(()=>data.entries.filter(e=>(!selectedQueue||data.queues.find(q=>q.id===selectedQueue)?.name===e.queue_name)&&[e.ticket_code,e.patient_name??"",e.queue_name].some(v=>v.toLowerCase().includes(search.toLowerCase()))),[data,selectedQueue,search]);
+  const next=[...waiting].sort((a,b)=>Number(b.legal_priority)-Number(a.legal_priority)||new Date(a.enqueued_at)-new Date(b.enqueued_at))[0];
+
+  async function perform(entry,action) {
+    if (busy) return;
+    setBusy(true);setNotice("");setError("");
+    try {
+      await api(`/staff/reception/entries/${entry.id}/${action}`,{method:"POST"});
+      setSelected(entry.id);setTab("atendimento");
+      setNotice(action==="call"?`Senha ${entry.ticket_code} chamada. O paciente verá o cronômetro no acompanhamento.`:"Chegada confirmada na recepção.");
+      await refresh();
+    } catch(err) {setError(err.message);}
+    finally {setBusy(false);}
   }
-  function callPatient(id) {
-    const p = patients.find(item => item.id === id);
-    if (!p) return;
-    setPatients(list => list.map(item => item.id === id ? { ...item, status: 'Em atendimento' } : item));
-    setCurrentId(id);
-    setTab('atendimento');
-    showNotice('Senha ' + p.ticket + ' chamada para a recepção.');
-  }
-  function forward() {
-    if (!current) return;
-    setPatients(list => list.map(p => p.id === current.id ? { ...p, status: 'Encaminhado', destination } : p));
-    setModal('receipt');
-    showNotice('Paciente encaminhado para ' + destination + '.');
-  }
-  function addPatient(event) {
-    event.preventDefault();
-    const name = newName.trim();
-    if (!name) return;
-    const prefix = newCategory === 'Convênio' ? 'C' : 'P';
-    const code = prefix + (newPriority ? 'P' : '');
-    const max = patients.filter(p => p.ticket.startsWith(code) && /^\d+$/.test(p.ticket.slice(code.length))).reduce((n, p) => Math.max(n, Number(p.ticket.slice(code.length))), 0);
-    const ticket = code + String(max + 1).padStart(3, '0');
-    const patient = { id: Date.now(), ticket, name, category: newCategory, priority: newPriority, status: 'Aguardando', destination: 'Clínica geral' };
-    setPatients(list => [...list, patient]);
-    setNewName('');
-    setNewPriority(false);
-    setModal(null);
-    setTab('fila');
-    showNotice('Senha ' + ticket + ' criada para paciente fictício.');
-  }
-  return <div className="attendant-app">
+
+  return <div className="attendant-app attendant-live">
     <header className="attendant-topbar">
       <div className="attendant-brand"><span className="attendant-brand-icon">S</span><div><strong>SICA</strong><small>SISTEMA DE CONTROLE DE ATENDIMENTO</small></div></div>
-      <div className="attendant-user"><span className="attendant-user-dot">AT</span><span>Atendente <small>Ambiente de demonstração</small></span></div>
+      <div className="attendant-user"><span className="attendant-user-dot">AT</span><span>Recepção <small>Fila conectada ao Neon</small></span></div>
     </header>
     <div className="attendant-container">
-      <div className="attendant-title-row"><div><p className="attendant-eyebrow">ÁREA OPERACIONAL</p><h1>Painel do atendente</h1><p>Gerencie senhas e acompanhe os atendimentos da clínica.</p></div><button type="button" className="attendant-primary" onClick={() => setModal('new')}>+ Novo paciente</button></div>
-      <nav className="attendant-tabs" aria-label="Navegação do atendente">{TABS.map(t => <button key={t.id} type="button" className={tab === t.id ? 'selected' : ''} onClick={() => setTab(t.id)}>{t.label}</button>)}</nav>
-      {notice && <div className="attendant-alert" role="status"><span>{notice}</span><button type="button" aria-label="Fechar aviso" onClick={() => setNotice('')}>×</button></div>}
-      {tab === 'dashboard' && <>
-        <div className="attendant-stats"><div><span>Senhas aguardando</span><strong>{waiting.length}</strong><small>Fila da recepção</small></div><div><span>Em atendimento</span><strong>{patients.filter(p => p.status === 'Em atendimento').length}</strong><small>Chamadas ativas</small></div><div><span>Encaminhados</span><strong>{completed.length}</strong><small>Atendimentos realizados</small></div><div><span>Total de senhas</span><strong>{patients.length}</strong><small>Hoje • Demonstração</small></div></div>
-        <div className="attendant-grid"><section className="attendant-card"><div className="attendant-card-head"><div><h2>Próxima chamada</h2><p>Controle da fila de atendimento</p></div><span className="attendant-chip">Recepção</span></div><div className="attendant-next"><span>PRÓXIMA SENHA</span><strong>{[...waiting].sort((a,b)=>Number(b.priority)-Number(a.priority)||a.id-b.id)[0]?.ticket || '—'}</strong><p>{waiting.length} pessoa(s) aguardando</p></div><button type="button" className="attendant-primary attendant-wide" onClick={callNext}>Chamar próxima senha</button></section><section className="attendant-card"><div className="attendant-card-head"><div><h2>Atendimento atual</h2><p>Paciente selecionado</p></div></div>{current ? <div className="attendant-current"><span className="attendant-mini-label">SENHA</span><strong>{current.ticket}</strong><p>{current.name}</p><span className={'attendant-status '+statusClass(current.status)}>{current.status}</span><button type="button" className="attendant-outline" onClick={() => setTab('atendimento')}>Abrir atendimento</button></div> : <div className="attendant-empty">Nenhum paciente chamado. Selecione a próxima senha.</div>}</section></div>
+      <div className="attendant-title-row"><div><p className="attendant-eyebrow">ÁREA OPERACIONAL</p><h1>Painel do atendente</h1><p>Senhas emitidas pelo Totem e filas da clínica.</p></div><button type="button" className="attendant-outline" onClick={refresh}>Atualizar filas</button></div>
+      <nav className="attendant-tabs" aria-label="Navegação do atendente">
+        {[["dashboard","Visão geral"],["fila","Fila de espera"],["atendimento","Atendimento"],["pacientes","Senhas do dia"]].map(([id,title])=><button key={id} type="button" className={tab===id?"selected":""} onClick={()=>setTab(id)}>{title}</button>)}
+      </nav>
+      {error&&<div className="attendant-alert" role="alert">{error}</div>}
+      {notice&&<div className="attendant-alert" role="status">{notice}</div>}
+      {loading?<p>Carregando dados reais...</p>:<>
+        {tab==="dashboard"&&<>
+          <div className="attendant-stats"><div><span>Aguardando na recepção</span><strong>{waiting.length}</strong><small>Senhas do Totem</small></div><div><span>Chamadas ativas</span><strong>{active.filter(e=>e.status==="called").length}</strong><small>Aguardando comparecimento</small></div><div><span>No balcão</span><strong>{active.filter(e=>e.status==="in_service").length}</strong><small>Chegada confirmada</small></div><div><span>Filas configuradas</span><strong>{data.queues.length}</strong><small>Disponíveis no banco</small></div></div>
+          <div className="attendant-grid"><section className="attendant-card"><div className="attendant-card-head"><div><h2>Próxima senha</h2><p>Atendimento por ordem e prioridade</p></div><span className="attendant-chip">Recepção</span></div><div className="attendant-next"><span>PRÓXIMA CHAMADA</span><strong>{next?.ticket_code??"—"}</strong><p>{waiting.length} aguardando</p></div><button type="button" className="attendant-primary attendant-wide" disabled={!next||busy} onClick={()=>perform(next,"call")}>Chamar próxima senha</button></section>
+          <section className="attendant-card"><div className="attendant-card-head"><div><h2>Filas da clínica</h2><p>Selecione para visualizar as senhas</p></div></div><div className="attendant-queue-grid">{data.queues.map(q=><button type="button" key={q.id} className="attendant-queue-button" onClick={()=>{setSelectedQueue(q.id);setTab("fila");}}><span>{q.name}</span><strong>{q.waiting}</strong><small>{label(q.stage_type)} · aguardando</small></button>)}</div>{!data.queues.length&&<p>Nenhuma fila configurada.</p>}</section></div>
+        </>}
+        {tab==="fila"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Filas de espera</h2><p>Selecione uma fila para visualizar seus atendimentos</p></div></div><div className="attendant-queue-grid">{data.queues.map(q=><button key={q.id} type="button" className={selectedQueue===q.id?"attendant-queue-button active":"attendant-queue-button"} onClick={()=>setSelectedQueue(selectedQueue===q.id?null:q.id)}><span>{q.name}</span><strong>{q.waiting}</strong><small>{label(q.stage_type)}</small></button>)}</div><div className="attendant-table-wrap"><table className="attendant-table"><thead><tr><th>Senha</th><th>Fila</th><th>Prioridade</th><th>Situação</th><th>Ação</th></tr></thead><tbody>{filtered.map(e=><tr key={e.id}><td><strong className="attendant-ticket">{e.ticket_code}</strong></td><td>{e.queue_name}</td><td>{e.legal_priority?"Prioritário":"Comum"}</td><td>{statusLabels[e.status]??e.status}</td><td>{e.stage_type==="reception"&&e.status==="waiting"?<button type="button" disabled={busy} className="attendant-small-button" onClick={()=>perform(e,"call")}>Chamar</button>:<button type="button" className="attendant-small-button" onClick={()=>{setSelected(e.id);setTab("atendimento");}}>Ver detalhes</button>}</td></tr>)}</tbody></table>{!filtered.length&&<div className="attendant-empty">Nenhuma senha nesta seleção.</div>}</div></section>}
+        {tab==="atendimento"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Atendimento da recepção</h2><p>Confira a senha e confirme a chegada ao balcão</p></div></div>{current?<><div className="attendant-highlight"><span>SENHA SELECIONADA</span><strong>{current.ticket_code}</strong><p>{current.queue_name}</p></div><div className="attendant-info-grid"><div><span>Situação</span><strong>{statusLabels[current.status]??current.status}</strong></div><div><span>Prioridade</span><strong>{current.legal_priority?"Prioritário":"Comum"}</strong></div><div><span>Paciente</span><strong>{current.patient_name??"Ainda não cadastrado"}</strong></div><div><span>Etapa</span><strong>{label(current.stage_type)}</strong></div></div>{current.stage_type==="reception"&&current.status==="called"&&<button type="button" disabled={busy} className="attendant-primary attendant-wide" onClick={()=>perform(current,"arrival")}>Confirmar chegada ao balcão</button>}<p className="attendant-disclaimer">Cadastro de dados, envio de WhatsApp e encaminhamento estão em preparação; não registre informações clínicas nesta versão.</p></>:<div className="attendant-empty">Chame ou selecione uma senha para começar.</div>}</section>}
+        {tab==="pacientes"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Senhas registradas</h2><p>Dados operacionais disponíveis no Neon</p></div></div><input className="attendant-input attendant-search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar senha, fila ou nome" aria-label="Buscar senhas"/><div className="attendant-table-wrap"><table className="attendant-table"><thead><tr><th>Senha</th><th>Fila</th><th>Paciente</th><th>Situação</th></tr></thead><tbody>{filtered.map(e=><tr key={e.id}><td>{e.ticket_code}</td><td>{e.queue_name}</td><td>{e.patient_name??"Não cadastrado"}</td><td>{statusLabels[e.status]??e.status}</td></tr>)}</tbody></table></div></section>}
       </>}
-      {tab === 'fila' && <section className="attendant-card"><div className="attendant-card-head"><div><h2>Fila de espera</h2><p>Senhas aguardando chamada</p></div><button type="button" className="attendant-primary" onClick={callNext}>Chamar próxima</button></div><div className="attendant-table-wrap"><table className="attendant-table"><thead><tr><th>Senha</th><th>Paciente</th><th>Atendimento</th><th>Prioridade</th><th>Situação</th><th>Ação</th></tr></thead><tbody>{waiting.map(p => <tr key={p.id}><td><strong className="attendant-ticket">{p.ticket}</strong></td><td>{p.name}</td><td>{p.category}</td><td>{p.priority ? 'Prioritário' : 'Comum'}</td><td><span className="attendant-status waiting">Aguardando</span></td><td><button type="button" className="attendant-small-button" onClick={() => callPatient(p.id)}>Chamar</button></td></tr>)}</tbody></table>{!waiting.length && <div className="attendant-empty">Nenhuma senha aguardando.</div>}</div></section>}
-      {tab === 'atendimento' && <div className="attendant-grid"><section className="attendant-card"><div className="attendant-card-head"><div><h2>Atendimento da recepção</h2><p>Confirme os dados e encaminhe o paciente</p></div></div>{current ? <><div className="attendant-highlight"><span>SENHA ATUAL</span><strong>{current.ticket}</strong><p>{current.name}</p></div><div className="attendant-info-grid"><div><span>Tipo de atendimento</span><strong>{current.category}</strong></div><div><span>Prioridade</span><strong>{current.priority ? 'Prioritário' : 'Comum'}</strong></div><div><span>Situação</span><strong>{current.status}</strong></div><div><span>Etapa</span><strong>Recepção</strong></div></div><label className="attendant-label" htmlFor="attendant-destination">Encaminhar para</label><select id="attendant-destination" className="attendant-input" value={destination} onChange={e => setDestination(e.target.value)}><option>Clínica geral</option><option>Cardiologia</option><option>Pediatria</option><option>Triagem</option><option>Exames</option></select><button type="button" className="attendant-primary attendant-wide" disabled={current.status === 'Encaminhado'} onClick={() => setModal('confirm')}>{current.status === 'Encaminhado' ? 'Encaminhamento concluído' : 'Confirmar encaminhamento'}</button></> : <div className="attendant-empty">Chame uma senha para começar o atendimento.</div>}</section><section className="attendant-card"><div className="attendant-card-head"><div><h2>Comprovante do paciente</h2><p>Acompanhamento por QR Code</p></div></div>{current ? <div className="attendant-receipt"><span>SICA • ACOMPANHAMENTO</span><strong>{current.ticket}</strong><p>{current.name}</p>{trackingUrl && <QRCodeSVG value={trackingUrl} size={150} marginSize={1} />}<small>Escaneie para acompanhar a senha</small><a href={trackingUrl} target="_blank" rel="noreferrer">Abrir acompanhamento</a></div> : <div className="attendant-empty">O comprovante aparecerá após a chamada.</div>}</section></div>}
-      {tab === 'pacientes' && <section className="attendant-card"><div className="attendant-card-head"><div><h2>Pacientes do dia</h2><p>Registros fictícios para apresentação</p></div><button type="button" className="attendant-primary" onClick={() => setModal('new')}>+ Cadastrar</button></div><input className="attendant-input attendant-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome ou senha" aria-label="Buscar pacientes"/><div className="attendant-table-wrap"><table className="attendant-table"><thead><tr><th>Senha</th><th>Paciente</th><th>Tipo</th><th>Prioridade</th><th>Situação</th></tr></thead><tbody>{filtered.map(p => <tr key={p.id}><td><strong className="attendant-ticket">{p.ticket}</strong></td><td>{p.name}</td><td>{p.category}</td><td>{p.priority ? 'Sim' : 'Não'}</td><td><span className={'attendant-status '+statusClass(p.status)}>{p.status}</span></td></tr>)}</tbody></table>{!filtered.length && <div className="attendant-empty">Nenhum paciente encontrado.</div>}</div></section>}
-      <p className="attendant-disclaimer">Protótipo demonstrativo: informações fictícias, sem persistência no banco de dados.</p>
     </div>
-    {modal && <div className="attendant-modal-backdrop" role="presentation" onMouseDown={e => {if(e.target === e.currentTarget) setModal(null);}}><div className="attendant-modal" role="dialog" aria-modal="true" aria-label={modal === 'new' ? 'Novo paciente' : modal === 'confirm' ? 'Confirmar encaminhamento' : 'Comprovante'}><button type="button" className="attendant-modal-close" onClick={() => setModal(null)} aria-label="Fechar">×</button>{modal === 'new' ? <form onSubmit={addPatient}><p className="attendant-eyebrow">CADASTRO DEMONSTRATIVO</p><h2>Novo paciente</h2><label className="attendant-label" htmlFor="new-name">Nome fictício do paciente</label><input id="new-name" className="attendant-input" required maxLength={80} value={newName} onChange={e => setNewName(e.target.value)} placeholder="Ex.: Ana Martins"/><label className="attendant-label" htmlFor="new-category">Tipo de atendimento</label><select id="new-category" className="attendant-input" value={newCategory} onChange={e => setNewCategory(e.target.value)}><option>Convênio</option><option>Particular</option></select><label className="attendant-checkbox"><input type="checkbox" checked={newPriority} onChange={e => setNewPriority(e.target.checked)}/> Atendimento prioritário</label><button type="submit" className="attendant-primary attendant-wide">Gerar senha</button></form> : modal === 'confirm' ? <><p className="attendant-eyebrow">CONFIRMAÇÃO</p><h2>Encaminhar paciente?</h2><p>Senha <strong>{current?.ticket}</strong> será encaminhada para <strong>{destination}</strong>.</p><div className="attendant-modal-actions"><button type="button" className="attendant-outline" onClick={() => setModal(null)}>Cancelar</button><button type="button" className="attendant-primary" onClick={forward}>Confirmar</button></div></> : <><p className="attendant-eyebrow">ENCAMINHAMENTO CONCLUÍDO</p><h2>Paciente encaminhado!</h2><p>Senha <strong>{current?.ticket}</strong> • {destination}</p><div className="attendant-modal-actions"><button type="button" className="attendant-primary" onClick={() => {setModal(null);setTab('dashboard');}}>Voltar ao painel</button></div></>}</div></div>}
   </div>;
 }
