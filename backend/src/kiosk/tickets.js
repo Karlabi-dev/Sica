@@ -112,6 +112,12 @@ export async function trackTicket(req,res) {
       [hash(token)]
     );
     if (!rows[0]) return res.status(404).json({ error: "Link inválido ou expirado" });
-    return res.json(rows[0]);
+    const ticket = rows[0];
+    const averageMinutes = ticket.stage_type === "reception" ? 5 : ticket.stage_type === "consultation" ? 20 : null;
+    const ahead = Number(ticket.ahead);
+    const estimatedWaitMinutes = ticket.status === "waiting" && averageMinutes !== null && Number.isFinite(ahead)
+      ? Math.max(0, ahead) * averageMinutes
+      : null;
+    return res.json({ ...ticket, estimated_wait_minutes: estimatedWaitMinutes });
   } catch { return res.status(503).json({ error: "Acompanhamento indisponível" }); }
 }
