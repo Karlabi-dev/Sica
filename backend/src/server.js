@@ -10,6 +10,7 @@ import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js"
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
 import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, receptionTrackingLink } from "./reception/operations.js";
 
+import { medicalOverview, medicalAction } from "./medical/operations.js";
 import { doctorCatalog, createDoctor, updateDoctor } from "./admin/doctors.js";
 import { requestDevice, deviceStatus, operationalAuth, listDevices, approveDevice, revokeDevice } from "./devices/access.js";
 
@@ -63,6 +64,8 @@ app.patch("/admin/doctors/:id", staffAuth, updateDoctor);
 app.get("/admin/devices", staffAuth, listDevices);
 app.patch("/admin/devices/:id/approve", staffAuth, approveDevice);
 app.post("/admin/devices/:id/revoke", staffAuth, revokeDevice);
+app.get("/staff/medical/overview", operationalAuth, medicalOverview);
+app.post("/staff/medical/entries/:entryId/:action", operationalAuth, medicalAction);
 app.get("/staff/reception/overview", operationalAuth, receptionOverview);
 app.post("/staff/reception/entries/:entryId/call", operationalAuth, receptionCall);
 app.post("/staff/reception/entries/:entryId/arrival", operationalAuth, receptionArrival);
