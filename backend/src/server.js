@@ -4,6 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { checkDatabase, closeDatabase } from "./config/database.js";
 import { staffAuth } from "./auth/firebaseAdmin.js";
+import { rateLimit } from "./security/rateLimit.js";
 import { revokeAdminSession } from "./auth/adminEmailSession.js";
 import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js";
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
@@ -13,6 +14,7 @@ import { requestDevice, deviceStatus, operationalAuth, listDevices, approveDevic
 
 const app = express();
 app.disable("x-powered-by");
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(express.json({ limit: "32kb" }));
 
@@ -50,9 +52,9 @@ app.get("/ready", async (_req, res) => {
 });
 
 app.get("/public/clinic", clinicPublic);
-app.post("/public/kiosk/tickets", issueKioskTicket);
+app.post("/public/kiosk/tickets", rateLimit({windowMs:60000,max:15}), issueKioskTicket);
 app.get("/public/track/:token", trackTicket);
-app.post("/devices/request", requestDevice);
+app.post("/devices/request", rateLimit({windowMs:3600000,max:8}), requestDevice);
 app.get("/devices/status", deviceStatus);
 app.get("/admin/devices", staffAuth, listDevices);
 app.patch("/admin/devices/:id/approve", staffAuth, approveDevice);
@@ -61,8 +63,8 @@ app.get("/staff/reception/overview", operationalAuth, receptionOverview);
 app.post("/staff/reception/entries/:entryId/call", operationalAuth, receptionCall);
 app.post("/staff/reception/entries/:entryId/arrival", operationalAuth, receptionArrival);
 
-app.post("/auth/admin/email-code/request", requestAdminEmailCode);
-app.post("/auth/admin/email-code/verify", verifyAdminEmailCode);
+app.post("/auth/admin/email-code/request", rateLimit({windowMs:900000,max:6}), requestAdminEmailCode);
+app.post("/auth/admin/email-code/verify", rateLimit({windowMs:900000,max:15}), verifyAdminEmailCode);
 
 app.post("/auth/admin/logout", staffAuth, async (req, res) => {
   if (req.staff.role !== "admin") return res.status(403).json({ error: "Forbidden" });
