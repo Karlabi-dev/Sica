@@ -81,6 +81,41 @@ export async function adminCatalogWrite(req,res){
   await client.query("COMMIT");return res.json({id:result.rows[0].id});
  }catch(e){await client.query("ROLLBACK").catch(()=>{});if(e.code==="23505")return res.status(409).json({error:"Já existe um registro com este nome"});return fail(res,e);}finally{client.release();}
 }
+export async function adminCatalogDelete(req,res){
+ res.set("Cache-Control","no-store");if(!admin(req,res))return;
+ const {kind,id}=req.params;
+ if(!["specialties","rooms"].includes(kind)||!uuid(id))return res.status(400).json({error:"Registro inválido"});
+ const client=await getPool().connect();
+ try{
+  await client.query("BEGIN");
+  const found=await client.query(`SELECT id,name FROM public.${kind} WHERE id=$1 FOR UPDATE`,[id]);
+  if(!found.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Registro não encontrado"});}
+  if(kind==="specialties"){
+   const linked=await client.query(`SELECT
+    (SELECT count(*)::int FROM public.queue_definitions WHERE specialty_id=$1) AS queues,
+    (SELECT count(*)::int FROM public.professional_specialties WHERE specialty_id=$1) AS doctors`,[id]);
+   if(linked.rows[0].queues||linked.rows[0].doctors){
+    await client.query("ROLLBACK");
+    return res.status(409).json({error:"Esta especialidade está vinculada a filas ou médicos. Desative-a para preservar os vínculos e o histórico."});
+   }
+  }
+  if(kind==="rooms"){
+   const linked=await client.query(`SELECT
+    (SELECT count(*)::int FROM public.doctor_profiles WHERE room_id=$1) AS doctors,
+    (SELECT count(*)::int FROM public.session_professionals WHERE room_id=$1) AS sessions,
+    (SELECT count(*)::int FROM public.call_events WHERE room_id=$1) AS calls`,[id]);
+   if(Object.values(linked.rows[0]).some(Boolean)){
+    await client.query("ROLLBACK");
+    return res.status(409).json({error:"Este consultório possui vínculos ou histórico. Desative-o em vez de excluir."});
+   }
+  }
+  await client.query(`DELETE FROM public.${kind} WHERE id=$1`,[id]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'catalog.deleted',$2,$3,$4::jsonb)",[req.staff.id,kind,id,JSON.stringify({name:found.rows[0].name})]);
+  await client.query("COMMIT");
+  return res.json({deleted:true});
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});if(e.code==="23503")return res.status(409).json({error:"Registro vinculado a outros dados. Desative-o em vez de excluir."});return fail(res,e);}
+ finally{client.release();}
+}
 export async function adminQueuesWrite(req,res){
  res.set("Cache-Control","no-store");if(!admin(req,res))return;
  const {name,specialtyId,doctorIds,queueMode,active}=req.body??{};
