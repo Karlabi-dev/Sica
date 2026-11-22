@@ -72,8 +72,8 @@ export async function issueKioskTicket(req, res) {
           return res.status(409).json({ error: "Configure uma fila de recepção antes de emitir senhas." });
         }
         const session = await client.query(
-          "INSERT INTO public.queue_sessions(definition_id,starts_at,ends_at,status) VALUES($1,now(),now()+interval '24 hours','active') RETURNING id",
-          [defs.rows[0].id]
+          "INSERT INTO public.queue_sessions(definition_id,starts_at,ends_at,status) VALUES($1,now(),(($2::date + 1)::timestamp AT TIME ZONE $3),'active') RETURNING id",
+          [defs.rows[0].id, day, settings.timezone]
         );
         active = await client.query("INSERT INTO public.queue_instances(session_id) VALUES($1) RETURNING id",[session.rows[0].id]);
       }
