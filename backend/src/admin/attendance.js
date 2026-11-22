@@ -5,7 +5,7 @@ export async function adminAttendance(req,res){
  if(req.staff?.role!=="admin")return res.status(403).json({error:"Acesso restrito"});
  try{
   const pool=getPool();
-  const [queues,entries]=await Promise.all([
+  const [queues,entries,averages]=await Promise.all([
    pool.query(`SELECT q.id,q.name,q.stage_type,q.queue_mode,s.name AS specialty_name,
     STRING_AGG(DISTINCT su.display_name,', ') AS doctors
     FROM public.queue_definitions q LEFT JOIN public.specialties s ON s.id=q.specialty_id
@@ -29,9 +29,30 @@ export async function adminAttendance(req,res){
     LEFT JOIN public.rooms r ON r.id=last_call.room_id
     WHERE e.status IN ('waiting','called','in_service')
     ORDER BY CASE e.status WHEN 'in_service' THEN 0 WHEN 'called' THEN 1 ELSE 2 END,
-     e.legal_priority DESC,e.enqueued_at,e.id LIMIT 1000`)
+     e.legal_priority DESC,e.enqueued_at,e.id LIMIT 1000`),
+   pool.query(`SELECT q.id AS definition_id,COUNT(*)::int AS sample_count,
+    ROUND(AVG(EXTRACT(EPOCH FROM (e.service_finished_at-e.service_started_at))/60)::numeric,1)::float AS avg_minutes
+    FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id
+    JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions q ON q.id=qs.definition_id
+    WHERE e.status IN ('completed','transferred') AND e.service_started_at IS NOT NULL
+    AND e.service_finished_at>e.service_started_at AND e.service_finished_at>=now()-interval '30 days'
+    GROUP BY q.id`)
   ]);
-  return res.json({queues:queues.rows,entries:entries.rows,serverTime:new Date().toISOString()});
+  const defaults={reception:10,triage:15,consultation:30,exam:30};
+  const averagesByQueue=new Map(averages.rows.map(a=>[a.definition_id,a]));
+  const enriched=entries.rows.map(e=>{
+   const history=averagesByQueue.get(e.definition_id);
+   const enoughHistory=history&&history.sample_count>=5;
+   const baselineMinutes=enoughHistory?Math.max(1,history.avg_minutes):defaults[e.stage_type]??30;
+   const baselineSource=enoughHistory?"historical":"reference";
+   const started=e.status==="in_service"?e.service_started_at:e.status==="called"?e.called_at:e.enqueued_at;
+   const elapsedMinutes=started?Math.max(0,(Date.now()-new Date(started).getTime())/60000):0;
+   const thresholdMinutes=e.status==="called"?2:e.status==="waiting"?Math.max(15,Math.ceil(baselineMinutes*1.5)):Math.max(5,Math.ceil(baselineMinutes*1.5));
+   const alertLevel=elapsedMinutes>=thresholdMinutes*1.5?"critical":elapsedMinutes>=thresholdMinutes?"warning":null;
+   return {...e,delay:{level:alertLevel,elapsedMinutes:Math.floor(elapsedMinutes),thresholdMinutes,
+    averageMinutes:baselineMinutes,source:baselineSource,sampleCount:history?.sample_count??0}};
+  });
+  return res.json({queues:queues.rows,entries:enriched,serverTime:new Date().toISOString()});
  }catch(e){console.error("Admin attendance error",{code:e.code??"UNKNOWN"});return res.status(503).json({error:"Não foi possível carregar os atendimentos do Neon"});}
 }
 
