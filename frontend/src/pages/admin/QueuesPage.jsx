@@ -28,6 +28,12 @@ export default function QueuesPage(){
   setNotice("");setError("");setDoctorSearch("");
   window.scrollTo({top:0,behavior:"smooth"});
  }
+ async function toggleQueue(q){
+  if(q.active&&!window.confirm("Desativar a fila "+q.name+"? A operação será bloqueada se houver pacientes aguardando, chamados ou em atendimento."))return;
+  setBusy(true);setError("");setNotice("");
+  try{await adminApi("/admin/catalog/queues/"+q.id+"/status",{method:"PATCH",body:JSON.stringify({active:!q.active})});setNotice(q.active?"Fila desativada.":"Fila ativada.");await load();}
+  catch(err){setError(err.message);}finally{setBusy(false);}
+ }
  async function save(e){
   e.preventDefault();setBusy(true);setError("");setNotice("");
   try{
@@ -89,7 +95,7 @@ export default function QueuesPage(){
   <section className="admin-panel queue-list">
    <div className="queue-list-heading"><div><h2>Filas cadastradas</h2><p>Consulte a situação e gerencie os profissionais de cada fila.</p></div><span>{filtered.length} resultado{filtered.length===1?"":"s"}</span></div>
    <div className="queue-toolbar"><input aria-label="Pesquisar filas" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Pesquisar fila ou especialidade"/><select aria-label="Filtrar situação" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Todas as situações</option><option value="active">Ativas</option><option value="inactive">Inativas</option></select></div>
-   <div className="admin-table-wrap"><table className="admin-table queue-table"><thead><tr><th>Fila</th><th>Especialidade</th><th>Tipo</th><th>Médicos vinculados</th><th>Situação</th><th>Ação</th></tr></thead><tbody>{filtered.map(q=>{const team=data.doctors.filter(d=>d.queue_definition_id===q.id);return <tr key={q.id}><td><strong>{q.name}</strong></td><td>{q.specialty_name??"—"}</td><td>{q.queue_mode==="shared"?"Compartilhada":"Individual"}</td><td>{team.length?<div className="queue-team">{team.map(d=><span key={d.id}>{d.display_name}</span>)}</div>:<span className="queue-muted">Sem médicos vinculados</span>}</td><td><span className={"queue-status "+(q.active?"active":"inactive")}>{q.active?"Ativa":"Inativa"}</span></td><td><button type="button" className="queue-edit-button" onClick={()=>editQueue(q)}>Gerenciar equipe</button></td></tr>})}</tbody></table>{!filtered.length&&<div className="queue-no-results">Nenhuma fila encontrada para os filtros selecionados.</div>}</div>
+   <div className="admin-table-wrap"><table className="admin-table queue-table"><thead><tr><th>Fila</th><th>Especialidade</th><th>Tipo</th><th>Médicos vinculados</th><th>Situação</th><th>Ação</th></tr></thead><tbody>{filtered.map(q=>{const team=data.doctors.filter(d=>d.queue_definition_id===q.id);return <tr key={q.id}><td><strong>{q.name}</strong></td><td>{q.specialty_name??"—"}</td><td>{q.queue_mode==="shared"?"Compartilhada":"Individual"}</td><td>{team.length?<div className="queue-team">{team.map(d=><span key={d.id}>{d.display_name}</span>)}</div>:<span className="queue-muted">Sem médicos vinculados</span>}</td><td><span className={"queue-status "+(q.active?"active":"inactive")}>{q.active?"Ativa":"Inativa"}</span></td><td><div className="queue-row-actions"><button type="button" className="queue-edit-button" onClick={()=>editQueue(q)}>Gerenciar equipe</button><button type="button" className="queue-edit-button" disabled={busy} onClick={()=>toggleQueue(q)}>{q.active?"Desativar":"Ativar"}</button></div></td></tr>})}</tbody></table>{!filtered.length&&<div className="queue-no-results">Nenhuma fila encontrada para os filtros selecionados.</div>}</div>
   </section>
  </main>;
 }
