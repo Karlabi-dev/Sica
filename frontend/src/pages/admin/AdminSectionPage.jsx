@@ -3,6 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { getDemoRows, SECTION_META } from "./adminDemoData.js";
 import DevicesPage from "./DevicesPage.jsx";
 import DoctorsPage from "./DoctorsPage.jsx";
+import PatientsPage from "./PatientsPage.jsx";
+import AuditPage from "./AuditPage.jsx";
+import CatalogPage from "./CatalogPage.jsx";
 import "./AdminPage.css";
 import "./AdminSectionPage.css";
 
@@ -21,6 +24,10 @@ export default function AdminSectionPage() {
   const { section: currentSection } = useParams();
   if(currentSection==="dispositivos") return <DevicesPage/>;
   if(currentSection==="profissionais") return <DoctorsPage/>;
+  if(currentSection==="pacientes") return <PatientsPage/>;
+  if(currentSection==="auditoria") return <AuditPage/>;
+  if(currentSection==="especialidades") return <CatalogPage kind="specialties"/>;
+  if(currentSection==="salas") return <CatalogPage kind="rooms"/>;
   return <DemoSectionPage/>;
 }
 
