@@ -3,7 +3,7 @@ import { getPool } from "../config/database.js";
 
 const uuid = v => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const forbidden = (req,res) => req.staff?.role !== "admin" ? (res.status(403).json({error:"Somente administradores"}),true) : false;
-const validSchedule = schedule => Array.isArray(schedule)&&schedule.length<=21&&schedule.every(x=>Number.isInteger(x.weekday)&&x.weekday>=0&&x.weekday<=6&&/^([01]\\d|2[0-3]):[0-5]\\d$/.test(x.start)&&/^([01]\\d|2[0-3]):[0-5]\\d$/.test(x.end)&&x.end>x.start);
+const validSchedule = schedule => Array.isArray(schedule)&&schedule.length<=21&&schedule.every(x=>Number.isInteger(x.weekday)&&x.weekday>=0&&x.weekday<=6&&/^([01]\d|2[0-3]):[0-5]\d$/.test(x.start)&&/^([01]\d|2[0-3]):[0-5]\d$/.test(x.end)&&x.end>x.start);
 async function saveSchedule(client,id,specialtyId,schedule){
  if(!validSchedule(schedule))throw Object.assign(new Error("Invalid schedule"),{code:"SCHEDULE"});
  if(specialtyId){if(!uuid(specialtyId))throw Object.assign(new Error("Invalid specialty"),{code:"SCHEDULE"});await client.query("INSERT INTO public.professional_specialties(staff_user_id,specialty_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[id,specialtyId]);}
