@@ -95,20 +95,25 @@ export async function receptionHandoff(req,res) {
   const def=await client.query("SELECT id,name,stage_type,queue_mode FROM public.queue_definitions WHERE id=$1 AND active=true AND stage_type IN ('consultation','exam')",[queueId]);
   if(!def.rows[0]) {await client.query("ROLLBACK");return res.status(400).json({error:"Fila de destino indisponível"});}
   const q=def.rows[0];
-  // For the demo, each destination is assigned one named test professional.
-  const demoUid= q.name.toLowerCase().includes("pediatria")?"demo:sica:pediatria":q.name.toLowerCase().includes("ultrassom")?"demo:sica:ultrassom":"demo:sica:clinica-geral";
-  const professional=await client.query("SELECT id FROM public.staff_users WHERE firebase_uid=$1 AND role='doctor' AND active=true",[demoUid]);
-  if(!professional.rows[0]) {await client.query("ROLLBACK");return res.status(409).json({error:"Execute a migração 0006 para habilitar as filas de teste"});}
+  const professional=await client.query(`SELECT p.staff_user_id AS id FROM public.doctor_profiles p
+   JOIN public.staff_users s ON s.id=p.staff_user_id
+   WHERE p.queue_definition_id=$1 AND p.enabled=true AND s.active=true
+   ORDER BY s.display_name LIMIT 1`,[q.id]);
+  if(!professional.rows[0]) {await client.query("ROLLBACK");return res.status(409).json({error:"Cadastre e ative um médico para esta fila"});}
   const settings=await client.query("SELECT timezone FROM public.clinic_settings WHERE id=1");
   const tz=settings.rows[0]?.timezone??"America/Fortaleza";
   const localDate=new Intl.DateTimeFormat("en-CA",{timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))",["sica-demo-destination:"+q.id+":"+localDate]);
+  const assignedProfessional=q.queue_mode==="individual"?professional.rows[0].id:null;
   let instance=await client.query(`SELECT qi.id FROM public.queue_instances qi JOIN public.queue_sessions qs ON qs.id=qi.session_id
-   WHERE qs.definition_id=$1 AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now() AND qi.professional_id=$2 AND qi.active=true LIMIT 1`,[q.id,professional.rows[0].id]);
+   WHERE qs.definition_id=$1 AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now()
+   AND qi.professional_id IS NOT DISTINCT FROM $2::uuid AND qi.active=true LIMIT 1`,[q.id,assignedProfessional]);
   if(!instance.rows[0]){
-   const session=await client.query(`INSERT INTO public.queue_sessions(definition_id,starts_at,ends_at,status)
+   let session=await client.query(`SELECT id FROM public.queue_sessions WHERE definition_id=$1 AND status='active'
+    AND starts_at<=now() AND ends_at>now() ORDER BY starts_at DESC LIMIT 1`,[q.id]);
+   if(!session.rows[0])session=await client.query(`INSERT INTO public.queue_sessions(definition_id,starts_at,ends_at,status)
     VALUES($1,now(),(($2::date + 1)::timestamp AT TIME ZONE $3),'active') RETURNING id`,[q.id,localDate,tz]);
-   instance=await client.query("INSERT INTO public.queue_instances(session_id,professional_id) VALUES($1,$2) RETURNING id",[session.rows[0].id,professional.rows[0].id]);
+   instance=await client.query("INSERT INTO public.queue_instances(session_id,professional_id) VALUES($1,$2) RETURNING id",[session.rows[0].id,assignedProfessional]);
   }
   const patient=await client.query("INSERT INTO public.patients(full_name,phone) VALUES($1,$2) RETURNING id",[patientName.trim(),whatsapp?.trim()||null]);
   await client.query("UPDATE public.patient_journeys SET patient_id=$2 WHERE id=$1",[entry.journey_id,patient.rows[0].id]);
