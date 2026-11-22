@@ -57,12 +57,26 @@ export async function issueKioskTicket(req, res) {
       // Tracking capability is intentionally never stored in plaintext. A retry cannot recover it.
       return res.status(409).json({ error: "Senha já emitida. Solicite auxílio na recepção se a impressão falhou." });
     }
-    const active = await client.query(
+    let active = await client.query(
       "SELECT qi.id FROM public.queue_instances qi JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions qd ON qd.id=qs.definition_id WHERE qd.stage_type='reception' AND qd.active=true AND qi.active=true AND qi.professional_id IS NULL AND qs.status='active' AND qs.starts_at <= now() AND qs.ends_at > now() ORDER BY qs.starts_at DESC LIMIT 1 FOR UPDATE OF qi",
     );
     if (!active.rows[0]) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({ error: "A fila de recepção ainda não está aberta. Procure a recepção." });
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", ["kiosk-reception:" + day]);
+      active = await client.query(
+        "SELECT qi.id FROM public.queue_instances qi JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions qd ON qd.id=qs.definition_id WHERE qd.stage_type='reception' AND qd.active=true AND qi.active=true AND qi.professional_id IS NULL AND qs.status='active' AND qs.starts_at <= now() AND qs.ends_at > now() ORDER BY qs.starts_at DESC LIMIT 1"
+      );
+      if (!active.rows[0]) {
+        const defs = await client.query("SELECT id FROM public.queue_definitions WHERE stage_type='reception' AND queue_mode='shared' AND active=true ORDER BY created_at LIMIT 1");
+        if (!defs.rows[0]) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({ error: "Configure uma fila de recepção antes de emitir senhas." });
+        }
+        const session = await client.query(
+          "INSERT INTO public.queue_sessions(definition_id,starts_at,ends_at,status) VALUES($1,now(),now()+interval '24 hours','active') RETURNING id",
+          [defs.rows[0].id]
+        );
+        active = await client.query("INSERT INTO public.queue_instances(session_id) VALUES($1) RETURNING id",[session.rows[0].id]);
+      }
     }
     const count = await client.query(
       "INSERT INTO public.kiosk_ticket_counters(local_date,category,last_number) VALUES($1,$2,1) ON CONFLICT(local_date,category) DO UPDATE SET last_number=public.kiosk_ticket_counters.last_number+1 RETURNING last_number",
