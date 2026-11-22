@@ -14,7 +14,7 @@ import { adminAttendance, adminAttendanceTracking } from "./admin/attendance.js"
 import { adminPatients, adminPatientJourney, adminAudit, adminCatalog, adminCatalogWrite, adminCatalogDelete, adminSeedSpecialties, adminQueuesWrite } from "./admin/management.js";
 import { updateQueueDoctors } from "./admin/queueDoctors.js";
 import { medicalOverview, medicalAction } from "./medical/operations.js";
-import { doctorCatalog, createDoctor, updateDoctor } from "./admin/doctors.js";
+import { doctorCatalog, createDoctor, updateDoctor, deleteDoctor } from "./admin/doctors.js";
 import { requestDevice, deviceStatus, operationalAuth, listDevices, approveDevice, revokeDevice } from "./devices/access.js";
 
 const app = express();
@@ -76,6 +76,7 @@ app.delete("/admin/catalog/:kind/:id",staffAuth,adminCatalogDelete);
 app.get("/admin/doctors", staffAuth, doctorCatalog);
 app.post("/admin/doctors", staffAuth, createDoctor);
 app.patch("/admin/doctors/:id", staffAuth, updateDoctor);
+app.delete("/admin/doctors/:id", staffAuth, deleteDoctor);
 app.get("/admin/devices", staffAuth, listDevices);
 app.patch("/admin/devices/:id/approve", staffAuth, approveDevice);
 app.post("/admin/devices/:id/revoke", staffAuth, revokeDevice);
