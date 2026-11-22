@@ -1,3 +1,4 @@
+import { getAdminSession } from "../../services/adminSession.js";
 import { useState } from "react";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
@@ -23,12 +24,12 @@ export default function LoginPage() {
     event.preventDefault();
     setBusy(true);
     setMessage("");
-    sessionStorage.removeItem("sica_admin_session");
+
     try {
       const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const token = await credential.user.getIdToken();
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001"}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, "X-Admin-Session": getAdminSession(credential.user.uid) },
         cache: "no-store",
       });
       if (!response.ok) {
