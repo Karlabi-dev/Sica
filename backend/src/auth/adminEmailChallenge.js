@@ -1,7 +1,6 @@
 import { createHash, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { getAuth } from "firebase-admin/auth";
 import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
-import nodemailer from "nodemailer";
 import { issueAdminSession } from "./adminEmailSession.js";
 import { getPool } from "../config/database.js";
 
@@ -24,11 +23,32 @@ async function adminFromToken(req) {
 }
 const generic = { message: "Se o administrador estiver habilitado, prossiga com a verificação." };
 function noStore(res) { res.set("Cache-Control", "no-store"); }
-function transporter() {
- const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM } = process.env;
- if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS || !SMTP_FROM) throw new Error("SMTP is not configured");
- return nodemailer.createTransport({ host: SMTP_HOST, port: Number(SMTP_PORT), secure: Number(SMTP_PORT) === 465, auth: { user: SMTP_USER, pass: SMTP_PASS } });
+async function sendAdminCode(to, code) {
+ const apiKey = process.env.BREVO_API_KEY;
+ const from = process.env.BREVO_FROM_EMAIL ?? process.env.SMTP_FROM;
+ if (!apiKey || !from || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) {
+  throw Object.assign(new Error("Brevo API credentials or verified sender not configured"), {code:"BREVO_CONFIG"});
+ }
+ const controller = new AbortController();
+ const timeout = setTimeout(() => controller.abort(), 12000);
+ try {
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+   method:"POST",
+   headers:{"api-key":apiKey,"Content-Type":"application/json","Accept":"application/json"},
+   body:JSON.stringify({
+    sender:{name:"SICA",email:from},
+    to:[{email:to}],
+    subject:"SICA — código de verificação",
+    textContent:"Seu código de verificação SICA é: "+code+"\nEle expira em 5 minutos. Se você não solicitou, ignore esta mensagem."
+   }),
+   signal:controller.signal
+  });
+  if (!response.ok) {
+   throw Object.assign(new Error("Brevo rejected transactional email"), {code:"BREVO_HTTP_"+response.status});
+  }
+ } finally {clearTimeout(timeout);}
 }
+
 export async function requestAdminEmailCode(req, res) {
  noStore(res);
  let admin;
@@ -43,7 +63,7 @@ export async function requestAdminEmailCode(req, res) {
   const codeHash = hashCode(id, code);
   await pool.query("INSERT INTO public.admin_email_challenges(id,staff_user_id,code_hash,expires_at) VALUES ($1,$2,$3,now() + interval '5 minutes')", [id, admin.id, codeHash]);
   try {
-   await transporter().sendMail({ from: process.env.SMTP_FROM, to: admin.email, subject: "SICA — código de verificação", text: "Seu código de verificação SICA é: " + code + "\nEle expira em 5 minutos. Se você não solicitou, ignore esta mensagem." });
+   await sendAdminCode(admin.email, code);
   } catch (error) {
    await pool.query("DELETE FROM public.admin_email_challenges WHERE id=$1", [id]);
    throw error;
