@@ -11,6 +11,7 @@ export const ADMIN_MENU = [
   { to: "/admin/especialidades", label: "Especialidades", icon: "✳" },
   { to: "/admin/salas", label: "Salas", icon: "▣" },
   { to: "/admin/televisores", label: "Televisores", icon: "▧" },
+  { to: "/admin/dispositivos", label: "Dispositivos autorizados", icon: "▣" },
   { to: "/admin/funcionarios", label: "Usuários e acessos", icon: "♙" },
   { to: "/admin/sessoes", label: "Sessões", icon: "◷" },
   { to: "/admin/relatorios", label: "Relatórios", icon: "▥" },
