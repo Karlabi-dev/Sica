@@ -93,6 +93,13 @@ export async function adminQueuesWrite(req,res){
   if(valid.rowCount!==doctorIds.length){await client.query("ROLLBACK");return res.status(409).json({error:"Um ou mais médicos estão inativos"});}
   const specialty=await client.query("SELECT 1 FROM public.specialties WHERE id=$1 AND active=true",[specialtyId]);
   if(!specialty.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Especialidade inativa"});}
+  if(queueMode==="individual"&&doctorIds.length!==1){await client.query("ROLLBACK");return res.status(400).json({error:"Fila individual exige exatamente um médico"});}
+  for(const doctorId of doctorIds){
+   const previous=await client.query("SELECT queue_definition_id FROM public.doctor_profiles WHERE staff_user_id=$1 FOR UPDATE",[doctorId]);
+   if(!previous.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Cadastre o consultório do médico antes de configurar a fila"});}
+   const occupied=await client.query("SELECT 1 FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id WHERE qs.definition_id=$1 AND e.status IN ('waiting','called','in_service') LIMIT 1",[previous.rows[0].queue_definition_id]);
+   if(occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Existem pacientes ativos na fila anterior. Conclua os atendimentos antes de alterar a equipe"});}
+  }
   const q=await client.query(`INSERT INTO public.queue_definitions(name,stage_type,specialty_id,queue_mode,active)
    VALUES($1,'consultation',$2,$3,$4) RETURNING id`,[name.trim(),specialtyId,queueMode,active]);
   for(const doctorId of doctorIds){
