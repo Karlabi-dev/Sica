@@ -51,6 +51,8 @@ export default function LiveTrackingPage() {
   const place = reception ? "guichê" : "consultório";
   const instruction = called ? (destination ? `Dirija-se ao ${destination}.` : `Você foi chamado! Dirija-se ao ${place} indicado pela equipe.`) : "";
   const status = STATUS[ticket?.status] ?? ticket?.status;
+  const ahead = Number.isFinite(Number(ticket?.ahead)) ? Number(ticket.ahead) : null;
+  const estimate = ticket?.estimated_wait_minutes ?? null;
 
   return <div className={`tracking-page tracking-page--font-${fontLevel} tracking-live`}>
     <div className="tracking-shell">
@@ -74,10 +76,11 @@ export default function LiveTrackingPage() {
             <p className="tracking-field-label">ETAPA DO ATENDIMENTO</p>
             <h2>{ticket.queue_name}</h2>
           </section>
+          {!called && ticket.status === "waiting" && <section className="tracking-wait-summary" aria-label="Informações da fila"><div><span>Pessoas à sua frente</span><strong>{ahead ?? "—"}</strong></div><div><span>Tempo estimado</span><strong>{estimate === null ? "Indisponível" : `${estimate} min`}</strong></div></section>}
           {called && <section className={`tracking-call-timer ${expired ? "tracking-call-timer--expired" : ""}`} aria-label="Tempo restante para comparecimento">
             <span>{expired ? "TEMPO ENCERRADO" : "TEMPO PARA COMPARECER"}</span>
             <strong role="timer" aria-live="off">{remaining === null ? "--:--" : formatTime(remaining)}</strong>
-            <p>{expired ? (reception ? "A recepção poderá encerrar sua chamada a qualquer momento." : "O médico irá encerrar seu atendimento a qualquer momento.") : remaining === null ? "Aguardando horário da chamada no servidor." : "O cronômetro começa no instante da chamada registrada pelo profissional."}</p>
+            <p>{expired ? "O responsável pelo seu atendimento irá encerrá-lo a qualquer momento." : remaining === null ? "Aguardando horário da chamada no servidor." : "O cronômetro começa no instante da chamada registrada pelo profissional."}</p>
           </section>}
           <aside className={`tracking-notice tracking-notice--${called ? "called" : "waiting"}`} role="status">
             <strong>{called ? "Você foi chamado!" : ticket.status === "waiting" ? "Aguarde sua chamada" : status}</strong>
@@ -87,12 +90,12 @@ export default function LiveTrackingPage() {
         </> : <p role="status">{error || "Consultando sua senha..."}</p>}
       </main>
       <footer className="tracking-footer tracking-professional-footer">
-        <strong>SICA</strong><p>Tecnologia para um atendimento mais organizado.</p>
+        <strong>SICA</strong>
         <nav aria-label="Informações e direitos">
           <a href="https://www.planalto.gov.br/ccivil_03/leis/l8078compilado.htm" target="_blank" rel="noopener noreferrer">Código de Defesa do Consumidor</a>
           <a href="https://www.planalto.gov.br/ccivil_03/_ato2018-2022/2018/lei/l13709.htm" target="_blank" rel="noopener noreferrer">Lei Geral de Proteção de Dados (LGPD)</a>
         </nav>
-        <p>Suporte SICA: canal oficial ainda não configurado. Solicite atendimento na recepção.</p>
+
         <small>© {new Date().getFullYear()} SICA · Acompanhamento de senhas</small>
       </footer>
     </div>
