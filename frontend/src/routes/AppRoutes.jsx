@@ -1,3 +1,4 @@
+import { Component } from "react";
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 const StaffGuard = lazy(() => import('./StaffGuard.jsx'));
@@ -15,4 +16,13 @@ const AdminSectionPage = lazy(() => import('../pages/admin/AdminSectionPage.jsx'
 import PublicLayout from '../layouts/PublicLayout.jsx';
 const OperationalLayout = lazy(() => import('../layouts/OperationalLayout.jsx'));
 const AdminLayout = lazy(() => import('../layouts/AdminLayout.jsx'));
-export function AppRoutes(){return <Suspense fallback={<main className="page"><p>Carregando...</p></main>}><Routes><Route path="/" element={<HomePage/>}/><Route element={<PublicLayout/>}><Route path="/totem" element={<KioskPage/>}/><Route path="/acompanhar/:token" element={<LiveTrackingPage/>}/><Route path="/clinica" element={<ClinicLandingPage/>}/><Route path="/tv" element={<TvPage/>}/></Route><Route path="/login" element={<LoginPage/>}/><Route path="/admin/verificar-email" element={<AdminEmailVerificationPage/>}/><Route element={<StaffGuard roles={["attendant", "admin"]}/> }><Route element={<OperationalLayout/>}><Route path="/atendente" element={<AttendantPage/>}/></Route></Route><Route element={<StaffGuard roles={["doctor", "admin"]}/> }><Route element={<OperationalLayout/>}><Route path="/medico" element={<DoctorPage/>}/></Route></Route><Route element={<StaffGuard roles={["admin"]}/> }><Route element={<AdminLayout/>}><Route path="/admin" element={<AdminPage/>}/><Route path="/admin/:section" element={<AdminSectionPage/>}/></Route></Route><Route path="*" element={<Navigate to="/" replace/>}/></Routes></Suspense>;}
+class RouteErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { failed: false }; }
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(error) { console.error("SICA route rendering failed", error); }
+  render() {
+    if (this.state.failed) return <main style={{ padding: 32, fontFamily: "system-ui", color: "#164f76" }}><h1>Não foi possível abrir o painel</h1><p>Atualize a página. Se continuar, envie uma captura do erro para corrigirmos.</p><button onClick={() => window.location.reload()}>Tentar novamente</button></main>;
+    return this.props.children;
+  }
+}
+export function AppRoutes(){return <RouteErrorBoundary><Suspense fallback={<main className="page"><p>Carregando...</p></main>}><Routes><Route path="/" element={<HomePage/>}/><Route element={<PublicLayout/>}><Route path="/totem" element={<KioskPage/>}/><Route path="/acompanhar/:token" element={<LiveTrackingPage/>}/><Route path="/clinica" element={<ClinicLandingPage/>}/><Route path="/tv" element={<TvPage/>}/></Route><Route path="/login" element={<LoginPage/>}/><Route path="/admin/verificar-email" element={<AdminEmailVerificationPage/>}/><Route element={<StaffGuard roles={["attendant", "admin"]}/> }><Route element={<OperationalLayout/>}><Route path="/atendente" element={<AttendantPage/>}/></Route></Route><Route element={<StaffGuard roles={["doctor", "admin"]}/> }><Route element={<OperationalLayout/>}><Route path="/medico" element={<DoctorPage/>}/></Route></Route><Route element={<StaffGuard roles={["admin"]}/> }><Route element={<AdminLayout/>}><Route path="/admin" element={<AdminPage/>}/><Route path="/admin/:section" element={<AdminSectionPage/>}/></Route></Route><Route path="*" element={<Navigate to="/" replace/>}/></Routes></Suspense></RouteErrorBoundary>;}
