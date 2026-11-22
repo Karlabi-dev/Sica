@@ -65,6 +65,10 @@ export async function updateDoctor(req,res) {
   await client.query("BEGIN");
   const s=await client.query("UPDATE public.staff_users SET display_name=$2,active=$3,updated_at=now() WHERE id=$1 AND role='doctor' RETURNING id",[req.params.id,name.trim(),active]);
   if(!s.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Médico não encontrado"});}
+  if(!active){
+   const linked=await client.query("SELECT 1 FROM public.doctor_profiles p JOIN public.queue_definitions q ON q.id=p.queue_definition_id WHERE p.staff_user_id=$1 AND q.active=true LIMIT 1",[req.params.id]);
+   if(linked.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Remova o médico da fila ativa antes de desativá-lo."});}
+  }
   await client.query("UPDATE public.doctor_profiles SET enabled=$2,updated_at=now() WHERE staff_user_id=$1",[req.params.id,active]);
   await saveSchedule(client,req.params.id,schedule);
   if(!active) await client.query("UPDATE public.authorized_devices SET status='revoked' WHERE staff_user_id=$1 AND status='active'",[req.params.id]);
@@ -83,6 +87,9 @@ export async function deleteDoctor(req,res){
   await client.query("BEGIN");
   const doctor=await client.query("SELECT id,display_name,active FROM public.staff_users WHERE id=$1 AND role='doctor' FOR UPDATE",[req.params.id]);
   if(!doctor.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Médico não encontrado"});}
+  if(doctor.rows[0].active){await client.query("ROLLBACK");return res.status(409).json({error:"Desative o médico antes de excluí-lo."});}
+  const linked=await client.query("SELECT 1 FROM public.doctor_profiles p JOIN public.queue_definitions q ON q.id=p.queue_definition_id WHERE p.staff_user_id=$1 AND q.active=true LIMIT 1",[req.params.id]);
+  if(linked.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"O médico ainda está vinculado a uma fila ativa."});}
   const active=await client.query("SELECT 1 FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.doctor_profiles dp ON dp.queue_definition_id=qs.definition_id WHERE dp.staff_user_id=$1 AND e.status IN ('waiting','called','in_service') LIMIT 1",[req.params.id]);
   if(active.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Existe atendimento ativo na fila do médico. Finalize os atendimentos antes de excluí-lo."});}
   await client.query("UPDATE public.staff_users SET active=false,updated_at=now() WHERE id=$1",[req.params.id]);
