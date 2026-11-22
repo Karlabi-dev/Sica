@@ -47,7 +47,7 @@ export async function listDevices(req,res) {
  if(req.staff?.role!=="admin") return res.status(403).json({error:"Somente administradores"});
  try {
   const {rows}=await getPool().query(`SELECT d.id,d.name,d.role,d.status,d.requested_at,d.approved_at,d.last_seen_at,
-   d.room_id,r.name AS room_name FROM public.authorized_devices d
+   d.room_id,d.staff_user_id,r.name AS room_name FROM public.authorized_devices d
    LEFT JOIN public.rooms r ON r.id=d.room_id ORDER BY CASE d.status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,d.requested_at DESC`);
   return res.json({devices:rows});
  }catch(err){return failure(res,err);}
