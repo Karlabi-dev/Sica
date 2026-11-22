@@ -36,9 +36,9 @@ export async function doctorCatalog(req,res) {
 export async function createDoctor(req,res) {
  res.set("Cache-Control","no-store");
  if(forbidden(req,res)) return;
- const {name,roomId,queueId,specialtyId,schedule=[]}=req.body??{};
+ const {name,roomId,specialtyId,schedule=[]}=req.body??{};
  if(typeof name!=="string"||name.trim().length<3||name.trim().length>160||!uuid(roomId))
-  return res.status(400).json({error:"Informe nome, consultório e fila válidos"});
+  return res.status(400).json({error:"Informe nome e consultório válidos"});
  const client=await getPool().connect();
  try {
   await client.query("BEGIN");
@@ -60,7 +60,7 @@ export async function createDoctor(req,res) {
 export async function updateDoctor(req,res) {
  res.set("Cache-Control","no-store");
  if(forbidden(req,res)) return;
- const {name,roomId,queueId,active,specialtyId,schedule=[]}=req.body??{};
+ const {name,roomId,active,specialtyId,schedule=[]}=req.body??{};
  if(!uuid(req.params.id)||typeof name!=="string"||name.trim().length<3||name.trim().length>160||!uuid(roomId)||typeof active!=="boolean")
   return res.status(400).json({error:"Dados do médico inválidos"});
  const client=await getPool().connect();
