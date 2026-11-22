@@ -43,6 +43,7 @@ export default function LiveTrackingPage() {
   }, [token, navigate]);
 
   const reception = ticket?.stage_type === "reception";
+  const awaitingDoctor = !reception && ticket?.status === "waiting";
   const called = ticket?.status === "called";
   const callTime = ticket?.latest_called_at ?? ticket?.called_at;
   const remaining = called && callTime ? Math.max(0, new Date(callTime).getTime() + CALL_DURATION - (clock + serverOffset)) : null;
@@ -76,15 +77,15 @@ export default function LiveTrackingPage() {
             <p className="tracking-field-label">ETAPA DO ATENDIMENTO</p>
             <h2>{ticket.queue_name}</h2>
           </section>
-          {!called && ticket.status === "waiting" && <section className="tracking-wait-summary" aria-label="Informações da fila"><div><span>Pessoas à sua frente</span><strong>{ahead ?? "—"}</strong></div><div><span>Tempo estimado</span><strong>{estimate === null ? "Indisponível" : `${estimate} min`}</strong></div></section>}
+          {!awaitingDoctor && !called && ticket.status === "waiting" && <section className="tracking-wait-summary" aria-label="Informações da fila"><div><span>Pessoas à sua frente</span><strong>{ahead ?? "—"}</strong></div><div><span>Tempo estimado</span><strong>{estimate === null ? "Indisponível" : `${estimate} min`}</strong></div></section>}
           {called && <section className={`tracking-call-timer ${expired ? "tracking-call-timer--expired" : ""}`} aria-label="Tempo restante para comparecimento">
             <span>{expired ? "TEMPO ENCERRADO" : "TEMPO PARA COMPARECER"}</span>
             <strong role="timer" aria-live="off">{remaining === null ? "--:--" : formatTime(remaining)}</strong>
             <p>{expired ? "O responsável pelo seu atendimento irá encerrá-lo a qualquer momento." : remaining === null ? "Aguardando horário da chamada no servidor." : "O cronômetro começa no instante da chamada registrada pelo profissional."}</p>
           </section>}
           <aside className={`tracking-notice tracking-notice--${called ? "called" : "waiting"}`} role="status">
-            <strong>{called ? "Você foi chamado!" : ticket.status === "waiting" ? "Aguarde sua chamada" : status}</strong>
-            <p>{called ? instruction : ticket.status === "waiting" ? "Fique atento ao painel de senhas. Esta página é atualizada automaticamente." : "Para mais informações, procure a equipe da clínica."}</p>
+            <strong>{called ? "Você foi chamado!" : awaitingDoctor ? "Aguarde o médico iniciar os atendimentos" : ticket.status === "waiting" ? "Aguarde sua chamada" : status}</strong>
+            <p>{called ? instruction : awaitingDoctor ? "Você já foi encaminhado. Quando o médico chamar sua senha, esta página exibirá a chamada e o cronômetro de 2 minutos." : ticket.status === "waiting" ? "Fique atento ao painel de senhas. Esta página é atualizada automaticamente." : "Para mais informações, procure a equipe da clínica."}</p>
           </aside>
           {error && <p role="status" className="tracking-live-error">{error}</p>}
         </> : <p role="status">{error || "Consultando sua senha..."}</p>}
