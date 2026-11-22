@@ -107,3 +107,11 @@
 .tracking-live .tracking-wait-summary span{font-size:.92rem;color:#51798e}
 .tracking-live .tracking-wait-summary strong{font-size:clamp(1.35rem,4.5vw,2.1rem);color:#155282}
 @media(max-width:420px){.tracking-live .tracking-brand small{font-size:.55rem}.tracking-live .tracking-professional-footer{padding:8px 10px!important}.tracking-live .tracking-professional-footer a{font-size:.68rem}.tracking-live .tracking-main{padding-top:20px}}
+
+
+/* Patient page: sticky header, natural document scrolling, footer after content */
+.tracking-live{height:auto!important;min-height:100dvh!important;overflow:visible!important;display:block!important}
+.tracking-live .tracking-shell{height:auto!important;min-height:100dvh!important;overflow:visible!important;display:flex!important;flex-direction:column!important}
+.tracking-live .tracking-sticky{position:sticky!important;top:0;z-index:50;flex-shrink:0}
+.tracking-live .tracking-main{flex:1 0 auto!important;min-height:auto!important;overflow:visible!important;overscroll-behavior:auto!important;padding-bottom:44px}
+.tracking-live .tracking-professional-footer{position:static!important;flex:0 0 auto!important;margin-top:auto}
