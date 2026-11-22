@@ -2,9 +2,9 @@ import {useEffect,useMemo,useState} from "react";
 import {adminApi} from "./adminApi.js";
 import "./QueuesPage.css";
 
-const initialForm={name:"",specialtyId:"",doctorIds:[],queueMode:"shared",active:true};
+const initialForm={name:"",specialtyId:"",doctorIds:[],queueMode:"shared",active:true,roomAssignments:{}};
 export default function QueuesPage(){
- const [data,setData]=useState({specialties:[],doctors:[],queues:[]});
+ const [data,setData]=useState({specialties:[],doctors:[],queues:[],rooms:[]});
  const [form,setForm]=useState(initialForm);
  const [editingQueue,setEditingQueue]=useState(null);
  const [error,setError]=useState("");
@@ -24,7 +24,7 @@ export default function QueuesPage(){
  function add(id){if(!id||form.doctorIds.includes(id))return;setForm(f=>({...f,doctorIds:[...f.doctorIds,id]}));setDoctorSearch("");}
  function editQueue(q){
   setEditingQueue(q.id);
-  setForm({name:q.name,specialtyId:q.specialty_id,doctorIds:data.doctors.filter(d=>d.queue_definition_id===q.id).map(d=>d.id),queueMode:q.queue_mode,active:q.active});
+  setForm({name:q.name,specialtyId:q.specialty_id,doctorIds:data.doctors.filter(d=>d.queue_definition_id===q.id).map(d=>d.id),queueMode:q.queue_mode,active:q.active,roomAssignments:Object.fromEntries(data.doctors.filter(d=>d.queue_definition_id===q.id).map(d=>[d.id,d.room_id??""]))});
   setNotice("");setError("");setDoctorSearch("");
   window.scrollTo({top:0,behavior:"smooth"});
  }
@@ -32,10 +32,10 @@ export default function QueuesPage(){
   e.preventDefault();setBusy(true);setError("");setNotice("");
   try{
    if(editingQueue){
-    await adminApi("/admin/catalog/queues/"+editingQueue+"/doctors",{method:"PATCH",body:JSON.stringify({doctorIds:form.doctorIds})});
+    await adminApi("/admin/catalog/queues/"+editingQueue+"/doctors",{method:"PATCH",body:JSON.stringify({doctorIds:form.doctorIds,roomAssignments:form.roomAssignments})});
     setNotice("Equipe da fila atualizada com sucesso.");
    }else{
-    await adminApi("/admin/catalog/queues",{method:"POST",body:JSON.stringify(form)});
+    const created=await adminApi("/admin/catalog/queues",{method:"POST",body:JSON.stringify({...form,doctorIds:[]})});if(form.doctorIds.length){await adminApi("/admin/catalog/queues/"+created.id+"/doctors",{method:"PATCH",body:JSON.stringify({doctorIds:form.doctorIds,roomAssignments:form.roomAssignments})});}
     setNotice("Fila criada com sucesso. Você pode vincular mais médicos a qualquer momento.");
    }
    reset();await load();
@@ -71,11 +71,12 @@ export default function QueuesPage(){
      <div className="queue-field-heading"><div><h3>Profissionais vinculados</h3><p>{form.queueMode==="shared"?"Adicione quantos médicos precisar, agora ou depois.":"Selecione um médico para esta fila individual."}</p></div><span className="queue-count">{selected.length} selecionado{selected.length===1?"":"s"}</span></div>
      <label className="queue-doctor-search">Buscar médico<input value={doctorSearch} onChange={e=>setDoctorSearch(e.target.value)} placeholder="Digite o nome do profissional"/></label>
      <label className="queue-doctor-select">Adicionar profissional<select value="" disabled={form.queueMode==="individual"&&form.doctorIds.length>=1} onChange={e=>add(e.target.value)}><option value="">Selecione um médico cadastrado</option>{available.map(d=><option key={d.id} value={d.id}>{d.display_name}</option>)}</select></label>
+     <div className="queue-room-assignments">{selected.map(d=><label key={d.id}>Consultório de {d.display_name}<select required value={form.roomAssignments[d.id]??""} onChange={e=>setForm(f=>({...f,roomAssignments:{...f.roomAssignments,[d.id]:e.target.value}}))}><option value="">Selecione um consultório</option>{data.rooms?.filter(room=>room.active||room.id===form.roomAssignments[d.id]).map(room=><option key={room.id} value={room.id}>{room.name}</option>)}</select></label>)}</div>
      <div className="queue-selected">
       {selected.length?selected.map(d=><div className="queue-doctor-chip" key={d.id}><span className="queue-avatar">{d.display_name.trim().charAt(0).toUpperCase()}</span><span>{d.display_name}</span><button type="button" aria-label={"Remover "+d.display_name} onClick={()=>setForm(f=>({...f,doctorIds:f.doctorIds.filter(id=>id!==d.id)}))}>×</button></div>):<div className="queue-empty-doctors">Nenhum médico selecionado. {form.queueMode==="shared"?"Você pode criar a fila e vincular a equipe posteriormente.":"Selecione um profissional para continuar."}</div>}
      </div>
      {!editingQueue&&<label className="queue-active"><input type="checkbox" checked={form.active} onChange={e=>setForm(f=>({...f,active:e.target.checked}))}/><span>Ativar fila ao cadastrar</span></label>}
-     <div className="queue-form-actions"><button type="submit" className="admin-primary" disabled={busy||(form.queueMode==="individual"&&form.doctorIds.length!==1)}>{busy?"Salvando...":editingQueue?"Salvar vínculos da equipe":"Criar fila"}</button>{editingQueue&&<button type="button" className="admin-secondary" onClick={reset}>Cancelar edição</button>}</div>
+     <div className="queue-form-actions"><button type="submit" className="admin-primary" disabled={busy||(form.queueMode==="individual"&&form.doctorIds.length!==1)||form.doctorIds.some(id=>!form.roomAssignments[id])||new Set(form.doctorIds.map(id=>form.roomAssignments[id])).size!==form.doctorIds.length}>{busy?"Salvando...":editingQueue?"Salvar vínculos da equipe":"Criar fila"}</button>{editingQueue&&<button type="button" className="admin-secondary" onClick={reset}>Cancelar edição</button>}</div>
     </form>
    </section>
    <aside className="admin-panel queue-help"><div className="queue-panel-heading"><span className="queue-step">?</span><div><h2>Como funciona?</h2><p>Fluxo simples para a clínica.</p></div></div>
