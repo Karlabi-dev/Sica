@@ -5,6 +5,13 @@ export default function DevicePendingPage(){
  const location=useLocation();
  const [state,setState]=useState({loading:true,status:"pending",name:""});
  const [error,setError]=useState("");
+ const [requesting,setRequesting]=useState(false);
+ async function requestAgain(){
+  setRequesting(true);setError("");
+  try{const d=await enrollDevice();setState({loading:false,...d});}
+  catch(e){setError(e.message);}
+  finally{setRequesting(false);}
+ }
  useEffect(()=>{
   let active=true;
   async function check(){
@@ -20,5 +27,5 @@ export default function DevicePendingPage(){
   }
   check();const id=setInterval(check,6000);return()=>{active=false;clearInterval(id);};
  },[location.pathname]);
- return <main className="page" style={{maxWidth:620,margin:"70px auto",padding:24,fontFamily:"system-ui"}}><h1>SICA · Autorização do computador</h1>{state.loading?<p>Verificando equipamento...</p>:state.status==="revoked"?<p>O acesso deste computador foi revogado. Contate a administração.</p>:<><p>Este computador está aguardando autorização da administração da clínica.</p><p>O administrador deve abrir <strong>Administração → Dispositivos autorizados</strong>, informar o nome e a função deste computador e aprovar a solicitação.</p><p>A página será atualizada automaticamente após a aprovação.</p></>}{error&&<p role="alert">{error}</p>}</main>;
+ return <main className="page" style={{maxWidth:620,margin:"70px auto",padding:24,fontFamily:"system-ui"}}><h1>SICA · Autorização do computador</h1>{state.loading?<p>Verificando equipamento...</p>:state.status==="revoked"?<div><p>O acesso deste computador foi revogado. Você pode solicitar uma nova autorização para usar este mesmo computador em outra função.</p><button type="button" onClick={requestAgain} disabled={requesting}>{requesting?"Solicitando...":"Solicitar nova autorização"}</button></div>:<><p>Este computador está aguardando autorização da administração da clínica.</p><p>O administrador deve abrir <strong>Administração → Dispositivos autorizados</strong>, informar o nome e a função deste computador e aprovar a solicitação.</p><p>A página será atualizada automaticamente após a aprovação.</p></>}{state.status==="pending"&&!state.loading&&<button type="button" onClick={requestAgain} disabled={requesting}>{requesting?"Atualizando...":"Reenviar solicitação"}</button>}{error&&<p role="alert">{error}</p>}</main>;
 }
