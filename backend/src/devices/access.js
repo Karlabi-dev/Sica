@@ -9,7 +9,7 @@ const failure = (res,err) => {
  if(code==="42P01")return res.status(503).json({error:"Tabela de dispositivos ausente no Neon. Verifique as migrações do banco.",code});
  if(code==="42703")return res.status(503).json({error:"Estrutura da tabela de dispositivos desatualizada no Neon.",code});
  if(code==="23514")return res.status(409).json({error:"A função ou situação do computador não é permitida pela configuração atual do banco.",code});
- if(code==="23505")return res.status(409).json({error:"Já existe um vínculo para este computador. Atualize a lista e tente novamente.",code});
+ if(code==="23505")return res.status(409).json({error:"Conflito de vínculo: este profissional ou computador já está associado a outro registro. Verifique os vínculos existentes.",code});
  return res.status(503).json({error:"Serviço de dispositivos indisponível. Consulte os logs do backend no Render.",code});
 };
 export async function requestDevice(req,res) {
@@ -92,7 +92,13 @@ export async function approveDevice(req,res) {
   if(role!=="doctor"&&!synthetic)staffId=null;
   if(!staffId) {
    const staff=await client.query(`INSERT INTO public.staff_users(firebase_uid,display_name,role,active)
-     VALUES($1,$2,$3,true) RETURNING id`,["device:"+device.id,name.trim(),role]);
+     VALUES($1,$2,$3,true)
+     ON CONFLICT(firebase_uid) DO UPDATE SET
+       display_name=EXCLUDED.display_name,
+       role=EXCLUDED.role,
+       active=true,
+       updated_at=now()
+     RETURNING id`,["device:"+device.id,name.trim(),role]);
    staffId=staff.rows[0].id;
   }else if(role!=="doctor"){
    await client.query("UPDATE public.staff_users SET display_name=$2,role=$3,active=true,updated_at=now() WHERE id=$1",[staffId,name.trim(),role]);
