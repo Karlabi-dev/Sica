@@ -21,6 +21,7 @@ export default function AttendantPage() {
   const [whatsapp,setWhatsapp]=useState("");
   const [destinationQueue,setDestinationQueue]=useState("");
   const [trackingLink,setTrackingLink]=useState("");
+  const [receipt,setReceipt]=useState(null);
 
   const api=useCallback((path,options={})=>deviceRequest(path,options),[]);
   const refresh=useCallback(async ()=>{
@@ -41,7 +42,7 @@ export default function AttendantPage() {
     setBusy(true);setNotice("");setError("");
     try {
       await api(`/staff/reception/entries/${entry.id}/${action}`,{method:"POST"});
-      setSelected(entry.id);setTab("atendimento");setTrackingLink("");
+      setSelected(entry.id);setTab("atendimento");setTrackingLink("");setReceipt(null);
       setNotice(action==="call"?`Senha ${entry.ticket_code} chamada. O paciente verá o cronômetro no acompanhamento.`:"Chegada confirmada na recepção.");
       await refresh();
     } catch(err) {setError(err.message);}
@@ -55,7 +56,9 @@ export default function AttendantPage() {
     try{
       const result=await api(`/staff/reception/entries/${entry.id}/handoff`,{method:"POST",body:JSON.stringify({patientName,whatsapp,queueId:destinationQueue})});
       const url=window.location.origin+"/acompanhar/"+encodeURIComponent(result.trackingToken);
-      setTrackingLink(url);setNotice(`Paciente encaminhado para ${result.queueName}. Compartilhe o link de acompanhamento.`);
+      setTrackingLink(url);
+      setReceipt({ticketCode:entry.ticket_code,patientName:patientName.trim(),queueName:result.queueName,trackingLink:url,issuedAt:new Date().toLocaleString("pt-BR")});
+      setNotice(`Paciente encaminhado para ${result.queueName}. Compartilhe o link de acompanhamento.`);
       await refresh();
     }catch(err){setError(err.message);}finally{setBusy(false);}
   }
@@ -63,7 +66,9 @@ export default function AttendantPage() {
     setBusy(true);setError("");
     try{
       const result=await api(`/staff/reception/entries/${entry.id}/tracking-link`,{method:"POST"});
-      setTrackingLink(window.location.origin+"/acompanhar/"+encodeURIComponent(result.trackingToken));
+      const url=window.location.origin+"/acompanhar/"+encodeURIComponent(result.trackingToken);
+      setTrackingLink(url);
+      setReceipt({ticketCode:entry.ticket_code,patientName:entry.patient_name,queueName:entry.queue_name,trackingLink:url,issuedAt:new Date().toLocaleString("pt-BR")});
       setSelected(entry.id);setTab("atendimento");
       setNotice("Novo link gerado. Links anteriores desta senha deixam de funcionar.");
     }catch(err){setError(err.message);}finally{setBusy(false);}
@@ -97,9 +102,21 @@ export default function AttendantPage() {
           <button type="submit" className="attendant-primary" disabled={busy||!destinationQueue||!patientName.trim()}>Salvar e encaminhar</button>
         </form>}
         {current.patient_name&&<button type="button" className="attendant-outline" disabled={busy} onClick={()=>showTracking(current)}>Gerar link de acompanhamento</button>}
-        {trackingLink&&<section style={{padding:16,marginTop:16,background:"#f1f7fb",borderRadius:12,overflowWrap:"anywhere"}}><h3>Acompanhamento pelo celular</h3><div style={{background:"#fff",padding:12,width:"fit-content",borderRadius:8,marginBottom:12}}><QRCodeSVG value={trackingLink} size={184} level="M" /></div><a href={trackingLink} target="_blank" rel="noopener noreferrer">{trackingLink}</a><div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" className="attendant-outline" onClick={()=>navigator.clipboard.writeText(trackingLink)}>Copiar link</button><a className="attendant-outline" href={trackingLink} target="_blank" rel="noopener noreferrer">Abrir acompanhamento</a></div><small>O link dá acesso ao status da senha. Não compartilhe publicamente. Ao gerar outro, o anterior é invalidado.</small></section>}</>:<div className="attendant-empty">Chame ou selecione uma senha para começar.</div>}</section>}
+        {trackingLink&&<section style={{padding:16,marginTop:16,background:"#f1f7fb",borderRadius:12,overflowWrap:"anywhere"}}><h3>Acompanhamento pelo celular</h3><div style={{background:"#fff",padding:12,width:"fit-content",borderRadius:8,marginBottom:12}}><QRCodeSVG value={trackingLink} size={184} level="M" /></div><a href={trackingLink} target="_blank" rel="noopener noreferrer">{trackingLink}</a><div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" className="attendant-outline" onClick={()=>navigator.clipboard.writeText(trackingLink)}>Copiar link</button><a className="attendant-outline" href={trackingLink} target="_blank" rel="noopener noreferrer">Abrir acompanhamento</a></div><button type="button" className="attendant-primary" onClick={()=>window.print()} disabled={!receipt}>Imprimir comprovante</button><small>O link dá acesso ao status da senha. Não compartilhe publicamente. Ao gerar outro, o anterior é invalidado.</small></section>}</>:<div className="attendant-empty">Chame ou selecione uma senha para começar.</div>}</section>}
         {tab==="pacientes"&&<section className="attendant-card"><div className="attendant-card-head"><div><h2>Senhas registradas</h2><p>Dados operacionais disponíveis no Neon</p></div></div><input className="attendant-input attendant-search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar senha, fila ou nome" aria-label="Buscar senhas"/><div className="attendant-table-wrap"><table className="attendant-table"><thead><tr><th>Senha</th><th>Fila</th><th>Paciente</th><th>Situação</th></tr></thead><tbody>{filtered.map(e=><tr key={e.id}><td>{e.ticket_code}</td><td>{e.queue_name}</td><td>{e.patient_name??"Não cadastrado"}</td><td>{statusLabels[e.status]??e.status}</td><td><button type="button" className="attendant-small-button" onClick={()=>{setSelected(e.id);setTab("atendimento");setTrackingLink("");}}>Detalhes</button></td></tr>)}</tbody></table></div></section>}
       </>}
     </div>
+    {receipt&&<div className="sica-print-receipt" aria-hidden="true">
+      <div className="sica-print-brand">SICA</div>
+      <h2>Comprovante de encaminhamento</h2>
+      <p className="sica-print-ticket">{receipt.ticketCode}</p>
+      <p><strong>Paciente:</strong> {receipt.patientName}</p>
+      <p><strong>Fila:</strong> {receipt.queueName}</p>
+      <p><strong>Emissão:</strong> {receipt.issuedAt}</p>
+      <div className="sica-print-qr"><QRCodeSVG value={receipt.trackingLink} size={180} level="M" /></div>
+      <p>Escaneie o QR Code para acompanhar sua senha pelo celular.</p>
+      <p className="sica-print-link">{receipt.trackingLink}</p>
+      <small>Guarde este comprovante. O link é pessoal e válido por tempo limitado.</small>
+    </div>}
   </div>;
 }
