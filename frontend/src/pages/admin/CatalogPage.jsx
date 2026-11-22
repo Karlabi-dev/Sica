@@ -1,5 +1,6 @@
 import { useEffect,useState } from "react";
 import { adminApi } from "./adminApi.js";
+import "./CatalogPage.css";
 export default function CatalogPage({kind}){
  const [data,setData]=useState({rooms:[],specialties:[]}),[form,setForm]=useState({id:null,name:"",active:true}),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const title=kind==="rooms"?"Salas e consultórios":"Especialidades";
