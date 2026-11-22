@@ -1,5 +1,5 @@
-import { createHash, randomBytes } from "node:crypto";
 import { getPool } from "../config/database.js";
+import { decryptTrackingToken } from "../security/trackingToken.js";
 
 const allowed = (req,res) => {
   if (!["attendant","admin"].includes(req.staff?.role)) { res.status(403).json({error:"Acesso negado"}); return false; }
@@ -72,7 +72,6 @@ export async function receptionArrival(req,res) {
   } catch(error) {return fail(res,error);}
 }
 
-const tokenHash = value => createHash("sha256").update(value).digest("hex");
 const validId = value => typeof value==="string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 export async function receptionHandoff(req,res) {
@@ -116,10 +115,8 @@ export async function receptionHandoff(req,res) {
   await client.query("UPDATE public.queue_entries SET status='transferred',service_finished_at=now() WHERE id=$1",[entryId]);
   const next=await client.query(`INSERT INTO public.queue_entries(journey_id,queue_id,ticket_code,payment_category,legal_priority)
    VALUES($1,$2,$3,$4,$5) RETURNING id`,[entry.journey_id,instance.rows[0].id,entry.ticket_code,entry.payment_category,entry.legal_priority]);
-  const token=randomBytes(32).toString("base64url");
-  await client.query("UPDATE public.patient_journeys SET tracking_token_hash=$2,tracking_expires_at=now()+interval '24 hours' WHERE id=$1",[entry.journey_id,tokenHash(token)]);
   await client.query("COMMIT");
-  return res.json({status:"transferred",entryId:next.rows[0].id,queueName:q.name,trackingToken:token,whatsappConfigured:false});
+  return res.json({status:"transferred",entryId:next.rows[0].id,queueName:q.name,whatsappConfigured:false});
  }catch(error){await client.query("ROLLBACK").catch(()=>{});return fail(res,error);}finally{client.release();}
 }
 
@@ -129,11 +126,13 @@ export async function receptionTrackingLink(req,res){
  if(!validId(req.params.entryId)) return res.status(400).json({error:"Senha inválida"});
  try{
   const pool=getPool();
-  const result=await pool.query(`SELECT j.id FROM public.queue_entries e JOIN public.patient_journeys j ON j.id=e.journey_id
+  const result=await pool.query(`SELECT j.id,j.tracking_token_encrypted,j.tracking_revoked_at,j.tracking_expires_at FROM public.queue_entries e JOIN public.patient_journeys j ON j.id=e.journey_id
    WHERE e.id=$1 AND j.patient_id IS NOT NULL AND j.tracking_revoked_at IS NULL`,[req.params.entryId]);
   if(!result.rows[0]) return res.status(404).json({error:"Paciente não encaminhado ou não encontrado"});
-  const token=randomBytes(32).toString("base64url");
-  await pool.query("UPDATE public.patient_journeys SET tracking_token_hash=$2,tracking_expires_at=now()+interval '24 hours' WHERE id=$1",[result.rows[0].id,tokenHash(token)]);
-  return res.json({trackingToken:token,expiresInSeconds:86400});
+  const record=result.rows[0];
+  if(!record.tracking_token_encrypted) return res.status(409).json({error:"Senha antiga: o link original não pode ser recuperado. Emita uma nova senha de teste."});
+  if(new Date(record.tracking_expires_at).getTime()<=Date.now()) return res.status(410).json({error:"Prazo de acompanhamento encerrado"});
+  const token=decryptTrackingToken(record.tracking_token_encrypted);
+  return res.json({trackingToken:token});
  }catch(error){return fail(res,error);}
 }
