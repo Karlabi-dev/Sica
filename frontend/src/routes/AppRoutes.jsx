@@ -1,17 +1,18 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import StaffGuard from './StaffGuard.jsx';
+const StaffGuard = lazy(() => import('./StaffGuard.jsx'));
 import HomePage from '../pages/HomePage.jsx';
-import LoginPage from '../pages/auth/LoginPage.jsx';
-import AdminEmailVerificationPage from '../pages/auth/AdminEmailVerificationPage.jsx';
+const LoginPage = lazy(() => import('../pages/auth/LoginPage.jsx'));
+const AdminEmailVerificationPage = lazy(() => import('../pages/auth/AdminEmailVerificationPage.jsx'));
 import KioskPage from '../pages/patient/KioskPage.jsx';
 import LiveTrackingPage from '../pages/patient/LiveTrackingPage.jsx';
 import ClinicLandingPage from '../pages/patient/ClinicLandingPage.jsx';
-import AttendantPage from '../pages/attendant/AttendantPage.jsx';
-import DoctorPage from '../pages/doctor/DoctorPage.jsx';
+const AttendantPage = lazy(() => import('../pages/attendant/AttendantPage.jsx'));
+const DoctorPage = lazy(() => import('../pages/doctor/DoctorPage.jsx'));
 import TvPage from '../pages/tv/TvPage.jsx';
-import AdminPage from '../pages/admin/AdminPage.jsx';
-import AdminSectionPage from '../pages/admin/AdminSectionPage.jsx';
+const AdminPage = lazy(() => import('../pages/admin/AdminPage.jsx'));
+const AdminSectionPage = lazy(() => import('../pages/admin/AdminSectionPage.jsx'));
 import PublicLayout from '../layouts/PublicLayout.jsx';
-import OperationalLayout from '../layouts/OperationalLayout.jsx';
-import AdminLayout from '../layouts/AdminLayout.jsx';
-export function AppRoutes(){return <Routes><Route path="/" element={<HomePage/>}/><Route element={<PublicLayout/>}><Route path="/totem" element={<KioskPage/>}/><Route path="/acompanhar/:token" element={<LiveTrackingPage/>}/><Route path="/clinica" element={<ClinicLandingPage/>}/><Route path="/tv" element={<TvPage/>}/></Route><Route path="/login" element={<LoginPage/>}/><Route path="/admin/verificar-email" element={<AdminEmailVerificationPage/>}/><Route element={<StaffGuard roles={["attendant", "admin"]}/> }><Route element={<OperationalLayout/>}><Route path="/atendente" element={<AttendantPage/>}/></Route></Route><Route element={<StaffGuard roles={["doctor", "admin"]}/> }><Route element={<OperationalLayout/>}><Route path="/medico" element={<DoctorPage/>}/></Route></Route><Route element={<StaffGuard roles={["admin"]}/> }><Route element={<AdminLayout/>}><Route path="/admin" element={<AdminPage/>}/><Route path="/admin/:section" element={<AdminSectionPage/>}/></Route></Route><Route path="*" element={<Navigate to="/" replace/>}/></Routes>;}
+const OperationalLayout = lazy(() => import('../layouts/OperationalLayout.jsx'));
+const AdminLayout = lazy(() => import('../layouts/AdminLayout.jsx'));
+export function AppRoutes(){return <Suspense fallback={<main className="page"><p>Carregando...</p></main>}><Routes><Route path="/" element={<HomePage/>}/><Route element={<PublicLayout/>}><Route path="/totem" element={<KioskPage/>}/><Route path="/acompanhar/:token" element={<LiveTrackingPage/>}/><Route path="/clinica" element={<ClinicLandingPage/>}/><Route path="/tv" element={<TvPage/>}/></Route><Route path="/login" element={<LoginPage/>}/><Route path="/admin/verificar-email" element={<AdminEmailVerificationPage/>}/><Route element={<StaffGuard roles={["attendant", "admin"]}/> }><Route element={<OperationalLayout/>}><Route path="/atendente" element={<AttendantPage/>}/></Route></Route><Route element={<StaffGuard roles={["doctor", "admin"]}/> }><Route element={<OperationalLayout/>}><Route path="/medico" element={<DoctorPage/>}/></Route></Route><Route element={<StaffGuard roles={["admin"]}/> }><Route element={<AdminLayout/>}><Route path="/admin" element={<AdminPage/>}/><Route path="/admin/:section" element={<AdminSectionPage/>}/></Route></Route><Route path="*" element={<Navigate to="/" replace/>}/></Routes></Suspense>;}
