@@ -89,3 +89,21 @@
 .tracking-live.tracking-page--font-2 .tracking-main{font-size:1.4rem}
 .tracking-live.tracking-page--font-1 .tracking-notice p,.tracking-live.tracking-page--font-1 .tracking-call-timer p{font-size:1.2rem}
 .tracking-live.tracking-page--font-2 .tracking-notice p,.tracking-live.tracking-page--font-2 .tracking-call-timer p{font-size:1.4rem}
+
+
+/* Full-width patient experience, fixed header, only main content scrolls */
+.tracking-live{height:100dvh;min-height:0;padding:0!important;overflow:hidden!important;background:#fff!important}
+.tracking-live .tracking-shell{height:100dvh;min-height:0!important;width:100%!important;max-width:none!important;min-width:0!important;margin:0!important;border-radius:0!important;box-shadow:none!important;display:flex;flex-direction:column;overflow:hidden!important}
+.tracking-live .tracking-sticky{position:relative;flex-shrink:0;z-index:30;width:100%;padding:12px clamp(16px,4vw,32px);box-shadow:0 2px 8px rgba(18,72,102,.06)}
+.tracking-live .tracking-main{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:24px clamp(18px,5vw,44px) 32px;width:100%;max-width:780px;margin:0 auto}
+.tracking-live .tracking-professional-footer{flex-shrink:0;width:100%;padding:10px 18px!important;text-align:center;background:#103b57}
+.tracking-live .tracking-professional-footer>strong{font-size:.9rem}
+.tracking-live .tracking-professional-footer nav{justify-content:center;gap:5px 18px;margin:5px 0!important}
+.tracking-live .tracking-professional-footer a{font-size:.73rem}
+.tracking-live .tracking-professional-footer small{border:0;padding:0;margin:3px 0 0;font-size:.69rem}
+.tracking-live .tracking-wait-summary{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0 12px;padding:22px 14px;border-radius:12px;background:#edf7fa}
+.tracking-live .tracking-wait-summary>div{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px}
+.tracking-live .tracking-wait-summary>div+div{border-left:1px solid #cce0e8}
+.tracking-live .tracking-wait-summary span{font-size:.92rem;color:#51798e}
+.tracking-live .tracking-wait-summary strong{font-size:clamp(1.35rem,4.5vw,2.1rem);color:#155282}
+@media(max-width:420px){.tracking-live .tracking-brand small{font-size:.55rem}.tracking-live .tracking-professional-footer{padding:8px 10px!important}.tracking-live .tracking-professional-footer a{font-size:.68rem}.tracking-live .tracking-main{padding-top:20px}}
