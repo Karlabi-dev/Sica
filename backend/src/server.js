@@ -10,6 +10,7 @@ import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js"
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
 import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, receptionTrackingLink } from "./reception/operations.js";
 
+import { adminPatients, adminPatientJourney, adminAudit, adminCatalog, adminCatalogWrite, adminQueuesWrite } from "./admin/management.js";
 import { medicalOverview, medicalAction } from "./medical/operations.js";
 import { doctorCatalog, createDoctor, updateDoctor } from "./admin/doctors.js";
 import { requestDevice, deviceStatus, operationalAuth, listDevices, approveDevice, revokeDevice } from "./devices/access.js";
@@ -58,6 +59,13 @@ app.post("/public/kiosk/tickets", rateLimit({windowMs:60000,max:15}), issueKiosk
 app.get("/public/track/:token", trackTicket);
 app.post("/devices/request", rateLimit({windowMs:3600000,max:8}), requestDevice);
 app.get("/devices/status", deviceStatus);
+app.get("/admin/patients",staffAuth,adminPatients);
+app.get("/admin/patients/:id",staffAuth,adminPatientJourney);
+app.get("/admin/audit",staffAuth,adminAudit);
+app.get("/admin/catalog",staffAuth,adminCatalog);
+app.post("/admin/catalog/queues",staffAuth,adminQueuesWrite);
+app.post("/admin/catalog/:kind",staffAuth,adminCatalogWrite);
+app.patch("/admin/catalog/:kind/:id",staffAuth,adminCatalogWrite);
 app.get("/admin/doctors", staffAuth, doctorCatalog);
 app.post("/admin/doctors", staffAuth, createDoctor);
 app.patch("/admin/doctors/:id", staffAuth, updateDoctor);
