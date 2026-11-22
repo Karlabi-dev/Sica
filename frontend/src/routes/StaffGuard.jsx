@@ -1,3 +1,4 @@
+import { getAdminSession } from "../services/adminSession.js";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { Navigate, Outlet } from "react-router-dom";
@@ -16,7 +17,7 @@ export default function StaffGuard({ roles }) {
       try {
         const token = await user.getIdToken();
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001"}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}`, "X-Admin-Session": sessionStorage.getItem("sica_admin_session") ?? "" },
+          headers: { Authorization: `Bearer ${token}`, "X-Admin-Session": getAdminSession(auth.currentUser?.uid) },
           cache: "no-store",
         });
         if (!response.ok) throw new Error("Access denied");
