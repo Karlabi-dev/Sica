@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { getPool } from "../config/database.js";
+import { encryptTrackingToken } from "../security/trackingToken.js";
 
 const CATEGORIES = {
   "particular": { payment: "private", priority: false, prefix: "P", label: "Particular" },
@@ -86,8 +87,8 @@ export async function issueKioskTicket(req, res) {
     const token = randomBytes(32).toString("base64url");
     const journeyId = randomUUID();
     const journey = await client.query(
-      "INSERT INTO public.patient_journeys(id,tracking_token_hash,tracking_expires_at) VALUES($1,$2,now()+interval '24 hours') RETURNING started_at",
-      [journeyId,hash(token)]
+      "INSERT INTO public.patient_journeys(id,tracking_token_hash,tracking_token_encrypted,tracking_expires_at) VALUES($1,$2,$3,now()+interval '30 days') RETURNING started_at",
+      [journeyId,hash(token),encryptTrackingToken(token)]
     );
     await client.query(
       "INSERT INTO public.queue_entries(journey_id,queue_id,ticket_code,payment_category,legal_priority) VALUES($1,$2,$3,$4,$5)",
@@ -108,7 +109,7 @@ export async function trackTicket(req,res) {
   if (typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token)) return res.status(404).json({ error: "Link inválido" });
   try {
     const { rows } = await getPool().query(
-      "SELECT e.ticket_code,e.status,e.legal_priority,e.enqueued_at,j.started_at,qd.name AS queue_name,qd.stage_type,e.called_at, ce.called_at AS latest_called_at, rm.name AS destination_name, now() AS server_now, (SELECT count(*)::int FROM public.queue_entries ahead WHERE ahead.queue_id=e.queue_id AND ahead.status='waiting' AND (ahead.legal_priority AND NOT e.legal_priority OR ahead.legal_priority=e.legal_priority AND (ahead.enqueued_at, ahead.id) < (e.enqueued_at,e.id))) AS ahead FROM public.patient_journeys j JOIN public.queue_entries e ON e.journey_id=j.id JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions qd ON qd.id=qs.definition_id LEFT JOIN LATERAL (SELECT called_at,room_id FROM public.call_events WHERE queue_entry_id=e.id ORDER BY called_at DESC LIMIT 1) ce ON true LEFT JOIN public.rooms rm ON rm.id=ce.room_id WHERE j.tracking_token_hash=$1 AND j.tracking_expires_at > now() AND j.tracking_revoked_at IS NULL ORDER BY e.enqueued_at DESC LIMIT 1",
+      "SELECT e.ticket_code,e.status,e.legal_priority,e.enqueued_at,j.started_at,qd.name AS queue_name,qd.stage_type,e.called_at, ce.called_at AS latest_called_at, rm.name AS destination_name, now() AS server_now, (SELECT count(*)::int FROM public.queue_entries ahead WHERE ahead.queue_id=e.queue_id AND ahead.status='waiting' AND (ahead.legal_priority AND NOT e.legal_priority OR ahead.legal_priority=e.legal_priority AND (ahead.enqueued_at, ahead.id) < (e.enqueued_at,e.id))) AS ahead FROM public.patient_journeys j JOIN public.queue_entries e ON e.journey_id=j.id JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions qd ON qd.id=qs.definition_id LEFT JOIN LATERAL (SELECT called_at,room_id FROM public.call_events WHERE queue_entry_id=e.id ORDER BY called_at DESC LIMIT 1) ce ON true LEFT JOIN public.rooms rm ON rm.id=ce.room_id WHERE j.tracking_token_hash=$1 AND j.tracking_revoked_at IS NULL AND j.tracking_expires_at > now() ORDER BY e.enqueued_at DESC LIMIT 1",
       [hash(token)]
     );
     if (!rows[0]) return res.status(404).json({ error: "Link inválido ou expirado" });
