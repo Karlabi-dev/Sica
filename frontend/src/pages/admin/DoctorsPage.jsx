@@ -1,54 +1,35 @@
-import { getAdminSession } from "../../services/adminSession.js";
-import { useCallback, useEffect, useState } from "react";
-import { auth } from "../../services/firebase.js";
-
-const API=import.meta.env.VITE_API_BASE_URL??"http://localhost:3001";
-const empty={name:"",roomId:"",queueId:"",specialtyId:"",schedule:[],active:true};
-
+import {useCallback,useEffect,useState} from "react";
+import {adminApi} from "./adminApi.js";
+import "./DoctorsPage.css";
+const days=["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
+const empty={name:"",schedule:[],active:true};
 export default function DoctorsPage(){
- const [data,setData]=useState({doctors:[],rooms:[],queues:[]});
- const [form,setForm]=useState(empty);
- const [editing,setEditing]=useState(null);
- const [error,setError]=useState("");
- const [notice,setNotice]=useState("");
- const [busy,setBusy]=useState(false);
- const api=useCallback(async(path,options={})=>{
-  if(!auth.currentUser) throw new Error("Entre como administrador.");
-  const token=await auth.currentUser.getIdToken();
-  const response=await fetch(API+path,{...options,cache:"no-store",headers:{"Authorization":"Bearer "+token,"X-Admin-Session":getAdminSession(auth.currentUser.uid),"Content-Type":"application/json",...(options.headers??{})}});
-  const body=await response.json().catch(()=>({}));
-  if(!response.ok) throw new Error(body.error??"Operação não autorizada");
-  return body;
- },[]);
- const refresh=useCallback(async()=>{try{setData(await api("/admin/doctors"));setError("");}catch(e){setError(e.message);}},[api]);
+ const [data,setData]=useState({doctors:[]}),[form,setForm]=useState(empty),[editing,setEditing]=useState(null),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
+ const refresh=useCallback(async()=>{try{setData(await adminApi("/admin/doctors"));setError("");}catch(e){setError(e.message);}},[]);
  useEffect(()=>{refresh();},[refresh]);
  const change=(key,value)=>setForm(f=>({...f,[key]:value}));
- const edit=d=>{setEditing(d.id);setForm({name:d.display_name,roomId:d.room_id??"",queueId:d.queue_definition_id??"",specialtyId:"",schedule:(d.schedule??[]).map(x=>({weekday:x.weekday,start:x.start_time.slice(0,5),end:x.end_time.slice(0,5)})),active:d.active});setNotice("");};
+ const edit=d=>{setEditing(d.id);setForm({name:d.display_name,schedule:(d.schedule??[]).map(x=>({weekday:Number(x.weekday),start:x.start_time.slice(0,5),end:x.end_time.slice(0,5)})),active:d.active});setNotice("");window.scrollTo({top:0,behavior:"smooth"});};
  const reset=()=>{setEditing(null);setForm(empty);};
- async function save(e){
-  e.preventDefault();setBusy(true);setError("");setNotice("");
-  try{
-   await api(editing?"/admin/doctors/"+editing:"/admin/doctors",{method:editing?"PATCH":"POST",body:JSON.stringify(form)});
-   setNotice(editing?"Médico atualizado no Neon.":"Médico cadastrado no Neon. Autorize o computador na seção Dispositivos.");
-   reset();await refresh();
-  }catch(err){setError(err.message);}finally{setBusy(false);}
+ const addDay=()=>{const next=[1,2,3,4,5,6,0].find(day=>!form.schedule.some(s=>s.weekday===day));if(next!==undefined)change("schedule",[...form.schedule,{weekday:next,start:"08:00",end:"12:00"}]);};
+ const setSlot=(index,key,value)=>change("schedule",form.schedule.map((s,i)=>i===index?{...s,[key]:value}:s));
+ async function save(e){e.preventDefault();setError("");setNotice("");
+  if(!form.schedule.length){setError("Informe pelo menos um dia e horário de atendimento.");return;}
+  if(form.schedule.some(s=>s.end<=s.start)){setError("O horário de término deve ser posterior ao início.");return;}
+  setBusy(true);
+  try{await adminApi(editing?"/admin/doctors/"+editing:"/admin/doctors",{method:editing?"PATCH":"POST",body:JSON.stringify(form)});setNotice(editing?"Dados do médico atualizados.":"Médico cadastrado. Vincule-o à fila e ao consultório em Filas e equipes.");reset();await refresh();}
+  catch(err){setError(err.message);}finally{setBusy(false);}
  }
- return <main className="admin-page">
-  <div className="admin-page-heading"><div><p className="admin-eyebrow">EQUIPE CLÍNICA</p><h1>Cadastro de médicos</h1><p>Cadastre o profissional e seu consultório. O vínculo com filas é feito no menu Filas e equipes.</p></div><button className="admin-primary" onClick={refresh}>Atualizar</button></div>
-  {error&&<p className="admin-form-notice" role="alert">{error}</p>}
-  {notice&&<p className="admin-form-notice" role="status">{notice}</p>}
-  <section className="admin-panel admin-settings"><h2>{editing?"Editar médico":"Novo médico"}</h2>
-   <form onSubmit={save}>
-    <label>Nome completo do médico<input required minLength={3} maxLength={160} value={form.name} onChange={e=>change("name",e.target.value)} placeholder="Ex.: Dra. Maria Silva"/></label>
-    <label>Consultório<select required value={form.roomId} onChange={e=>change("roomId",e.target.value)}><option value="">Selecione um consultório</option>{data.rooms.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-    
-    <label>Especialidade<select value={form.specialtyId} onChange={e=>change("specialtyId",e.target.value)}><option value="">Selecione a especialidade</option>{data.specialties?.filter(s=>s.active).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-    <h3>Horários de trabalho</h3>{form.schedule.map((slot,i)=><div key={i} style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"end"}}><label>Dia<select value={slot.weekday} onChange={e=>change("schedule",form.schedule.map((x,j)=>j===i?{...x,weekday:Number(e.target.value)}:x))}>{["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"].map((day,d)=><option key={d} value={d}>{day}</option>)}</select></label><label>Início<input type="time" required value={slot.start} onChange={e=>change("schedule",form.schedule.map((x,j)=>j===i?{...x,start:e.target.value}:x))}/></label><label>Fim<input type="time" required value={slot.end} onChange={e=>change("schedule",form.schedule.map((x,j)=>j===i?{...x,end:e.target.value}:x))}/></label><button type="button" onClick={()=>change("schedule",form.schedule.filter((_,j)=>j!==i))}>Remover</button></div>)}<button type="button" className="admin-secondary" onClick={()=>change("schedule",[...form.schedule,{weekday:1,start:"08:00",end:"12:00"}])}>+ Adicionar horário</button>
-    {editing&&<label><input type="checkbox" checked={form.active} onChange={e=>change("active",e.target.checked)}/> Médico ativo</label>}
-    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}><button className="admin-primary" disabled={busy||!form.roomId}>{busy?"Salvando...":editing?"Salvar alterações":"Cadastrar médico"}</button>{editing&&<button type="button" className="admin-secondary" onClick={reset}>Cancelar edição</button>}</div>
-   </form>
-   <p className="admin-section-note">O cadastro não autoriza automaticamente o acesso. O administrador também precisa aprovar o dispositivo do consultório. Uma fila compartilhada aceita vários médicos; uma individual, apenas um.</p>
-  </section>
-  <section className="admin-panel"><h2>Médicos cadastrados</h2><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Nome</th><th>Consultório</th><th>Fila</th><th>Modalidade</th><th>Status</th><th>Ação</th></tr></thead><tbody>{data.doctors.map(d=><tr key={d.id}><td>{d.display_name}</td><td>{d.room_name??"Não vinculado"}</td><td>{d.queue_name??"Não vinculada"}</td><td>{d.queue_mode==="shared"?"Compartilhada":d.queue_mode==="individual"?"Individual":"—"}</td><td>{d.active?"Ativo":"Inativo"}</td><td><button onClick={()=>edit(d)}>Editar</button></td></tr>)}</tbody></table>{!data.doctors.length&&<p>Nenhum médico cadastrado.</p>}</div></section>
+ return <main className="admin-page doctors-page">
+  <header className="admin-page-heading"><div><p className="admin-eyebrow">EQUIPE CLÍNICA</p><h1>Cadastro de médicos</h1><p>Cadastre os profissionais e seus horários. A especialidade, a fila e o consultório são definidos na organização dos atendimentos.</p></div><button type="button" className="admin-secondary" onClick={refresh}>Atualizar lista</button></header>
+  {error&&<p className="doctor-feedback error" role="alert">{error}</p>}{notice&&<p className="doctor-feedback success" role="status">{notice}</p>}
+  <div className="doctor-layout"><section className="admin-panel doctor-form-panel"><div className="doctor-panel-title"><span>01</span><div><h2>{editing?"Editar profissional":"Novo profissional"}</h2><p>Preencha os dados e a disponibilidade semanal.</p></div></div>
+   <form onSubmit={save} className="doctor-form"><label>Nome completo do médico<input required minLength={3} maxLength={160} value={form.name} onChange={e=>change("name",e.target.value)} placeholder="Ex.: Dra. Maria Silva"/></label>
+    <div className="doctor-schedule-head"><div><h3>Dias e horários de atendimento</h3><p>Informe quando o profissional começa e termina os atendimentos em cada dia.</p></div><button type="button" className="admin-secondary" onClick={addDay} disabled={form.schedule.length>=7}>+ Adicionar dia</button></div>
+    <div className="doctor-slots">{form.schedule.map((slot,i)=><div className="doctor-slot" key={i}><label>Dia da semana<select value={slot.weekday} onChange={e=>setSlot(i,"weekday",Number(e.target.value))}>{days.map((day,d)=><option key={d} value={d} disabled={form.schedule.some((s,j)=>j!==i&&s.weekday===d)}>{day}</option>)}</select></label><label>Início<input type="time" required value={slot.start} onChange={e=>setSlot(i,"start",e.target.value)}/></label><label>Término<input type="time" required value={slot.end} onChange={e=>setSlot(i,"end",e.target.value)}/></label><button type="button" className="doctor-remove" onClick={()=>change("schedule",form.schedule.filter((_,j)=>j!==i))} aria-label={"Remover "+days[slot.weekday]}>Remover</button></div>)}{!form.schedule.length&&<p className="doctor-empty">Nenhum horário informado. Clique em <strong>Adicionar dia</strong> para começar.</p>}</div>
+    {editing&&<label className="doctor-active"><input type="checkbox" checked={form.active} onChange={e=>change("active",e.target.checked)}/><span>Médico ativo</span></label>}
+    <div className="doctor-actions"><button className="admin-primary" disabled={busy}>{busy?"Salvando...":editing?"Salvar alterações":"Cadastrar médico"}</button>{editing&&<button type="button" className="admin-secondary" onClick={reset}>Cancelar edição</button>}</div>
+   </form></section>
+   <aside className="admin-panel doctor-info"><h2>Próximas etapas</h2><div><strong>1. Cadastre o médico</strong><p>Informe o nome e os dias e horários de atendimento.</p></div><div><strong>2. Organize a fila</strong><p>Em Filas e equipes, selecione a especialidade e adicione o médico à fila.</p></div><div><strong>3. Defina o consultório</strong><p>Escolha o consultório em que ele atenderá. Médicos da mesma fila podem usar consultórios diferentes.</p></div><p className="doctor-info-note">O acesso ao sistema depende também da autorização do dispositivo pelo administrador.</p></aside></div>
+  <section className="admin-panel doctor-list"><div className="doctor-list-head"><h2>Médicos cadastrados</h2><span>{data.doctors.length} profissionais</span></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Profissional</th><th>Disponibilidade</th><th>Fila</th><th>Consultório</th><th>Situação</th><th>Ação</th></tr></thead><tbody>{data.doctors.map(d=><tr key={d.id}><td><strong>{d.display_name}</strong></td><td>{d.schedule?.length?d.schedule.map(s=>days[Number(s.weekday)].slice(0,3)+" "+s.start_time.slice(0,5)+"–"+s.end_time.slice(0,5)).join(" · "):"Não informada"}</td><td>{d.queue_name??"Não vinculado"}</td><td>{d.room_name??"Não definido"}</td><td><span className={"doctor-status "+(d.active?"on":"off")}>{d.active?"Ativo":"Inativo"}</span></td><td><button type="button" className="doctor-edit" onClick={()=>edit(d)}>Editar</button></td></tr>)}</tbody></table>{!data.doctors.length&&<p className="doctor-empty">Nenhum médico cadastrado ainda.</p>}</div></section>
  </main>;
 }
