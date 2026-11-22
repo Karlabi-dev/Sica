@@ -13,3 +13,29 @@
 .attendant-live .attendant-table{min-width:620px}
 @media(max-width:720px){.attendant-live .attendant-topbar{height:65px;padding:0 14px}.attendant-live .attendant-container{width:calc(100% - 24px);padding-top:22px}.attendant-live .attendant-queue-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.attendant-live .attendant-user{font-size:12px}.attendant-live .attendant-brand small{max-width:125px;display:block}.attendant-live .attendant-tabs{gap:14px}}
 @media(max-width:380px){.attendant-live .attendant-queue-grid{grid-template-columns:1fr}.attendant-live .attendant-user-dot{display:none}}
+
+/* Patient referral receipt: only visible on paper / print preview. */
+.sica-print-receipt { display:none; }
+@media print {
+  @page { size: 80mm auto; margin: 4mm; }
+  body { background:white !important; }
+  body * { visibility:hidden !important; }
+  .sica-print-receipt, .sica-print-receipt * { visibility:visible !important; }
+  .sica-print-receipt {
+    display:block !important;
+    position:absolute; top:0; left:0;
+    width:72mm; max-width:72mm;
+    padding:0; margin:0;
+    background:white !important; color:#111 !important;
+    font:12px/1.4 Arial,sans-serif;
+    overflow-wrap:anywhere;
+    text-align:center;
+  }
+  .sica-print-brand { font-size:22px; font-weight:800; letter-spacing:2px; }
+  .sica-print-receipt h2 { font-size:14px; margin:8px 0; }
+  .sica-print-ticket { font-size:30px; font-weight:800; margin:12px 0; }
+  .sica-print-receipt p { margin:6px 0; }
+  .sica-print-qr { display:flex; justify-content:center; margin:14px 0; }
+  .sica-print-link { font-size:9px; }
+  .sica-print-receipt small { display:block; margin-top:12px; font-size:10px; }
+}
