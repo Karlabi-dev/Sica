@@ -4,7 +4,7 @@ const format=value=>value?new Date(value).toLocaleString("pt-BR"):"—";
 export default function PatientsPage(){
  const [rows,setRows]=useState([]),[selected,setSelected]=useState(null),[query,setQuery]=useState(""),[error,setError]=useState(""),[loading,setLoading]=useState(true);
  async function load(){try{const r=await adminApi("/admin/patients");setRows(r.patients);setError("");}catch(e){setError(e.message);}finally{setLoading(false);}}
- useEffect(()=>{load();},[]);
+ useEffect(()=>{load();const id=new URLSearchParams(window.location.search).get("journey");if(id&&/^[0-9a-f-]{36}$/i.test(id))detail(id);},[]);
  async function detail(id){try{setSelected(await adminApi("/admin/patients/"+id));setError("");}catch(e){setError(e.message);}}
  const filtered=rows.filter(r=>([r.full_name,r.ticket_code,r.journey_status,r.current_status].join(" ").toLowerCase()).includes(query.toLowerCase()));
  return <main className="admin-page"><div className="admin-page-heading"><div><p className="admin-eyebrow">JORNADAS NO NEON</p><h1>Pacientes e senhas</h1><p>Consulte a jornada completa e o link de acompanhamento quando ainda estiver válido.</p></div><button className="admin-primary" onClick={load}>Atualizar</button></div>
