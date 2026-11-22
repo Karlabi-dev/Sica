@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { getPool } from "../config/database.js";
 
 const allowed = (req,res) => {
@@ -17,7 +18,7 @@ export async function receptionOverview(req,res) {
         LEFT JOIN public.queue_instances qi ON qi.session_id=qs.id AND qi.active=true
         LEFT JOIN public.queue_entries e ON e.queue_id=qi.id
         WHERE qd.active=true GROUP BY qd.id,qd.name,qd.stage_type ORDER BY qd.stage_type,qd.name`),
-      pool.query(`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,
+      pool.query(`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,e.journey_id,
         qd.name AS queue_name,qd.stage_type,p.full_name AS patient_name,p.phone AS patient_phone,
         rm.name AS destination_name
         FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id
@@ -69,4 +70,70 @@ export async function receptionArrival(req,res) {
     if (!result.rowCount) return res.status(409).json({error:"A senha não está chamada na recepção"});
     return res.json({status:"in_service"});
   } catch(error) {return fail(res,error);}
+}
+
+const tokenHash = value => createHash("sha256").update(value).digest("hex");
+const validId = value => typeof value==="string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+export async function receptionHandoff(req,res) {
+ res.set("Cache-Control","no-store");
+ if(!allowed(req,res)) return;
+ const {entryId}=req.params;
+ const {patientName,whatsapp,queueId}=req.body??{};
+ if(!validId(entryId)||!validId(queueId)||typeof patientName!=="string"||patientName.trim().length<2||patientName.trim().length>180||
+    (whatsapp!=null && (typeof whatsapp!=="string"|| (whatsapp.trim()&&!/^\+?[0-9 ()-]{8,22}$/.test(whatsapp.trim())))))
+   return res.status(400).json({error:"Confira o nome, WhatsApp e fila de destino"});
+ const client=await getPool().connect();
+ try {
+  await client.query("BEGIN");
+  const entryResult=await client.query(`SELECT e.*,qd.stage_type FROM public.queue_entries e
+   JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id
+   JOIN public.queue_definitions qd ON qd.id=qs.definition_id WHERE e.id=$1 FOR UPDATE OF e`,[entryId]);
+  const entry=entryResult.rows[0];
+  if(!entry||entry.stage_type!=="reception"||entry.status!=="in_service"){
+   await client.query("ROLLBACK");return res.status(409).json({error:"Confirme a chegada na recepção antes do encaminhamento"});
+  }
+  const def=await client.query("SELECT id,name,stage_type,queue_mode FROM public.queue_definitions WHERE id=$1 AND active=true AND stage_type IN ('consultation','exam')",[queueId]);
+  if(!def.rows[0]) {await client.query("ROLLBACK");return res.status(400).json({error:"Fila de destino indisponível"});}
+  const q=def.rows[0];
+  // For the demo, each destination is assigned one named test professional.
+  const demoUid= q.name.toLowerCase().includes("pediatria")?"demo:sica:pediatria":q.name.toLowerCase().includes("ultrassom")?"demo:sica:ultrassom":"demo:sica:clinica-geral";
+  const professional=await client.query("SELECT id FROM public.staff_users WHERE firebase_uid=$1 AND role='doctor' AND active=true",[demoUid]);
+  if(!professional.rows[0]) {await client.query("ROLLBACK");return res.status(409).json({error:"Execute a migração 0006 para habilitar as filas de teste"});}
+  const settings=await client.query("SELECT timezone FROM public.clinic_settings WHERE id=1");
+  const tz=settings.rows[0]?.timezone??"America/Fortaleza";
+  const localDate=new Intl.DateTimeFormat("en-CA",{timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))",["sica-demo-destination:"+q.id+":"+localDate]);
+  let instance=await client.query(`SELECT qi.id FROM public.queue_instances qi JOIN public.queue_sessions qs ON qs.id=qi.session_id
+   WHERE qs.definition_id=$1 AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now() AND qi.professional_id=$2 AND qi.active=true LIMIT 1`,[q.id,professional.rows[0].id]);
+  if(!instance.rows[0]){
+   const session=await client.query(`INSERT INTO public.queue_sessions(definition_id,starts_at,ends_at,status)
+    VALUES($1,now(),(($2::date + 1)::timestamp AT TIME ZONE $3),'active') RETURNING id`,[q.id,localDate,tz]);
+   instance=await client.query("INSERT INTO public.queue_instances(session_id,professional_id) VALUES($1,$2) RETURNING id",[session.rows[0].id,professional.rows[0].id]);
+  }
+  const patient=await client.query("INSERT INTO public.patients(full_name,phone) VALUES($1,$2) RETURNING id",[patientName.trim(),whatsapp?.trim()||null]);
+  await client.query("UPDATE public.patient_journeys SET patient_id=$2 WHERE id=$1",[entry.journey_id,patient.rows[0].id]);
+  await client.query("UPDATE public.queue_entries SET status='transferred',service_finished_at=now() WHERE id=$1",[entryId]);
+  const next=await client.query(`INSERT INTO public.queue_entries(journey_id,queue_id,ticket_code,payment_category,legal_priority)
+   VALUES($1,$2,$3,$4,$5) RETURNING id`,[entry.journey_id,instance.rows[0].id,entry.ticket_code,entry.payment_category,entry.legal_priority]);
+  const token=randomBytes(32).toString("base64url");
+  await client.query("UPDATE public.patient_journeys SET tracking_token_hash=$2,tracking_expires_at=now()+interval '24 hours' WHERE id=$1",[entry.journey_id,tokenHash(token)]);
+  await client.query("COMMIT");
+  return res.json({status:"transferred",entryId:next.rows[0].id,queueName:q.name,trackingToken:token,whatsappConfigured:false});
+ }catch(error){await client.query("ROLLBACK").catch(()=>{});return fail(res,error);}finally{client.release();}
+}
+
+export async function receptionTrackingLink(req,res){
+ res.set("Cache-Control","no-store");
+ if(!allowed(req,res)) return;
+ if(!validId(req.params.entryId)) return res.status(400).json({error:"Senha inválida"});
+ try{
+  const pool=getPool();
+  const result=await pool.query(`SELECT j.id FROM public.queue_entries e JOIN public.patient_journeys j ON j.id=e.journey_id
+   WHERE e.id=$1 AND j.patient_id IS NOT NULL AND j.tracking_revoked_at IS NULL`,[req.params.entryId]);
+  if(!result.rows[0]) return res.status(404).json({error:"Paciente não encaminhado ou não encontrado"});
+  const token=randomBytes(32).toString("base64url");
+  await pool.query("UPDATE public.patient_journeys SET tracking_token_hash=$2,tracking_expires_at=now()+interval '24 hours' WHERE id=$1",[result.rows[0].id,tokenHash(token)]);
+  return res.json({trackingToken:token,expiresInSeconds:86400});
+ }catch(error){return fail(res,error);}
 }
