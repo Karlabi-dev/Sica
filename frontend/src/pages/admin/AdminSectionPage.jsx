@@ -7,6 +7,7 @@ import PatientsPage from "./PatientsPage.jsx";
 import AttendancePage from "./AttendancePage.jsx";
 import QueuesPage from "./QueuesPage.jsx";
 import AuditPage from "./AuditPage.jsx";
+import SettingsPage from "./SettingsPage.jsx";
 import CatalogPage from "./CatalogPage.jsx";
 import "./AdminPage.css";
 import "./AdminSectionPage.css";
@@ -31,6 +32,7 @@ export default function AdminSectionPage() {
   if(currentSection==="atendimentos") return <AttendancePage/>;
   if(currentSection==="filas") return <QueuesPage/>;
   if(currentSection==="auditoria") return <AuditPage/>;
+  if(currentSection==="configuracoes") return <SettingsPage/>;
   if(currentSection==="especialidades") return <CatalogPage kind="specialties"/>;
   if(currentSection==="salas") return <CatalogPage kind="rooms"/>;
   return <DemoSectionPage/>;
