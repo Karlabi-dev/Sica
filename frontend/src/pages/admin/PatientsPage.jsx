@@ -9,10 +9,21 @@ const statusLabel=value=>statusLabels[value]??(value?String(value).replace(/_/g,
 const statusTone=value=>["waiting","called","in_service","active"].includes(value)?"ongoing":["completed","finished"].includes(value)?"done":["cancelled","missed"].includes(value)?"stopped":"neutral";
 
 export default function PatientsPage(){
- const [rows,setRows]=useState([]),[selected,setSelected]=useState(null),[query,setQuery]=useState(""),[filter,setFilter]=useState("all"),[error,setError]=useState(""),[loading,setLoading]=useState(true),[detailLoading,setDetailLoading]=useState(false);
+ const [returnEntry,setReturnEntry]=useState(null),[returnReason,setReturnReason]=useState(""),[returnBusy,setReturnBusy]=useState(false),[notice,setNotice]=useState(""),[rows,setRows]=useState([]),[selected,setSelected]=useState(null),[query,setQuery]=useState(""),[filter,setFilter]=useState("all"),[error,setError]=useState(""),[loading,setLoading]=useState(true),[detailLoading,setDetailLoading]=useState(false);
  async function load(){setLoading(true);try{const r=await adminApi("/admin/patients");setRows(r.patients??[]);setError("");}catch(e){setError(e.message);}finally{setLoading(false);}}
  async function detail(id){setDetailLoading(true);try{setSelected(await adminApi("/admin/patients/"+id));setError("");}catch(e){setError(e.message);}finally{setDetailLoading(false);}}
  useEffect(()=>{load();const id=new URLSearchParams(window.location.search).get("journey");if(id&&/^[0-9a-f-]{36}$/i.test(id))detail(id);},[]);
+ async function returnToQueue(e){
+  e.preventDefault();
+  if(!returnEntry||returnReason.trim().length<10)return;
+  setReturnBusy(true);setError("");setNotice("");
+  try{
+   await adminApi("/admin/patients/entries/"+returnEntry.id+"/return-to-queue",{method:"POST",body:JSON.stringify({reason:returnReason.trim()})});
+   setNotice("Paciente devolvido à fila com sucesso.");
+   setReturnEntry(null);setReturnReason("");
+   await Promise.all([load(),detail(selected.journey.id)]);
+  }catch(err){setError(err.message);}finally{setReturnBusy(false);}
+ }
  const counts=useMemo(()=>({total:rows.length,waiting:rows.filter(r=>["waiting","called"].includes(r.current_status)).length,inService:rows.filter(r=>r.current_status==="in_service").length,completed:rows.filter(r=>["completed","finished"].includes(r.current_status)||r.journey_status==="completed").length}),[rows]);
  const filtered=useMemo(()=>rows.filter(r=>{
   const matches=[r.full_name,r.ticket_code,r.journey_status,r.current_status].some(x=>normalize(x).includes(normalize(query.trim())));
@@ -21,7 +32,7 @@ export default function PatientsPage(){
  return <main className="admin-page patients-page">
   <header className="admin-page-heading patients-heading"><div><p className="admin-eyebrow">ACOMPANHAMENTO CLÍNICO</p><h1>Pacientes e jornadas</h1><p>Consulte senhas, acompanhe a situação dos pacientes e visualize cada etapa do atendimento com segurança.</p></div><button type="button" className="admin-secondary" disabled={loading} onClick={load}>{loading?"Atualizando...":"↻ Atualizar dados"}</button></header>
   <div className="patients-kpis"><div><span>Jornadas registradas</span><strong>{counts.total}</strong><small>Total consultado</small></div><div><span>Aguardando ou chamados</span><strong>{counts.waiting}</strong><small>Pacientes na fila</small></div><div><span>Em atendimento</span><strong>{counts.inService}</strong><small>Atendimentos em andamento</small></div><div><span>Concluídos</span><strong>{counts.completed}</strong><small>Jornadas finalizadas</small></div></div>
-  {error&&<div className="patients-feedback" role="alert">{error}</div>}
+  {error&&<div className="patients-feedback" role="alert">{error}</div>}{notice&&<div className="patients-feedback patients-notice" role="status">{notice}</div>}
   <section className="admin-panel patients-list">
    <div className="patients-section-heading"><div><h2>Lista de pacientes</h2><p>Pesquise pelo nome, número da senha ou situação.</p></div><span>{filtered.length} resultado{filtered.length===1?"":"s"}</span></div>
    <div className="patients-toolbar"><label>Pesquisar paciente<input type="search" placeholder="Nome, senha ou situação..." value={query} onChange={e=>setQuery(e.target.value)}/></label><label>Filtrar situação<select value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Todas as situações</option><option value="waiting">Aguardando / chamados</option><option value="in_service">Em atendimento</option><option value="completed">Concluídos</option></select></label>{(query||filter!=="all")&&<button type="button" className="admin-secondary" onClick={()=>{setQuery("");setFilter("all");}}>Limpar filtros</button>}</div>
@@ -31,8 +42,9 @@ export default function PatientsPage(){
    <div className="patients-modal-summary"><div><span>Início da jornada</span><strong>{format(selected.journey.started_at)}</strong></div><div><span>Situação</span><strong>{statusLabel(selected.journey.status)}</strong></div><div><span>Etapas registradas</span><strong>{selected.events?.length??0}</strong></div></div>
    {selected.trackingToken&&<a className="patients-tracking" href={"/acompanhar/"+encodeURIComponent(selected.trackingToken)} target="_blank" rel="noopener noreferrer">Abrir acompanhamento da senha ↗</a>}
    <h3 className="patients-history-title">Linha do tempo dos atendimentos</h3>
-   <div className="patients-history">{(selected.events??[]).map((e,i)=><article className="patients-event" key={e.id}><span className="patients-event-number">{i+1}</span><div className="patients-event-content"><div className="patients-event-top"><strong>{e.queue_name??"Etapa do atendimento"}</strong><span className={"patients-status "+statusTone(e.status)}>{statusLabel(e.status)}</span></div><p>{e.room_name?"Consultório: "+e.room_name+" · ":""}Senha: {e.ticket_code??"—"}</p><div className="patients-event-times"><span><b>Entrada</b>{format(e.enqueued_at)}</span><span><b>Chamada</b>{format(e.called_at)}</span><span><b>Início</b>{format(e.service_started_at)}</span><span><b>Saída</b>{format(e.service_finished_at)}</span></div></div></article>)}{!selected.events?.length&&<p className="patients-empty">Nenhuma etapa registrada.</p>}</div>
+   <div className="patients-history">{(selected.events??[]).map((e,i)=><article className="patients-event" key={e.id}><span className="patients-event-number">{i+1}</span><div className="patients-event-content"><div className="patients-event-top"><strong>{e.queue_name??"Etapa do atendimento"}</strong><span className={"patients-status "+statusTone(e.status)}>{statusLabel(e.status)}</span></div><p>{e.room_name?"Consultório: "+e.room_name+" · ":""}Senha: {e.ticket_code??"—"}</p>{["called","no_show"].includes(e.status)&&!e.service_started_at&&<button type="button" className="patients-return-button" onClick={()=>{setReturnEntry(e);setReturnReason("");setError("");}}>Devolver à fila</button>}<div className="patients-event-times"><span><b>Entrada</b>{format(e.enqueued_at)}</span><span><b>Chamada</b>{format(e.called_at)}</span><span><b>Início</b>{format(e.service_started_at)}</span><span><b>Saída</b>{format(e.service_finished_at)}</span></div></div></article>)}{!selected.events?.length&&<p className="patients-empty">Nenhuma etapa registrada.</p>}</div>
    <div className="patients-modal-actions"><button type="button" className="admin-secondary" onClick={()=>setSelected(null)}>Fechar histórico</button></div>
   </section></div>}
+ {returnEntry&&<div className="admin-modal-backdrop"><section className="admin-modal patients-return-modal" role="dialog" aria-modal="true" aria-labelledby="patients-return-title"><div className="admin-modal-head"><h2 id="patients-return-title">Devolver paciente à fila</h2><button type="button" aria-label="Fechar" onClick={()=>setReturnEntry(null)}>×</button></div><p>O paciente voltará à espera como próximo da sua categoria de prioridade. Essa ação ficará registrada na auditoria.</p><form onSubmit={returnToQueue}><label>Motivo obrigatório<textarea required minLength={10} maxLength={300} rows={3} value={returnReason} onChange={e=>setReturnReason(e.target.value)} placeholder="Ex.: O paciente perdeu a chamada e retornou à recepção."/></label><div className="patients-modal-actions"><button type="button" className="admin-secondary" onClick={()=>setReturnEntry(null)}>Cancelar</button><button type="submit" className="admin-primary" disabled={returnBusy||returnReason.trim().length<10}>{returnBusy?"Salvando...":"Confirmar retorno"}</button></div></form></section></div>}
  </main>;
 }
