@@ -83,18 +83,25 @@ export async function approveDevice(req,res) {
   let assignedRoom=roomId??null;
   if(role==="doctor") {
    if(typeof doctorId!=="string"||!/^[0-9a-f-]{36}$/i.test(doctorId)){await client.query("ROLLBACK");return res.status(400).json({error:"Selecione um médico cadastrado"});}
-   const doctor=await client.query("SELECT p.room_id FROM public.doctor_profiles p JOIN public.staff_users s ON s.id=p.staff_user_id WHERE s.id=$1 AND s.role='doctor' AND s.active=true AND p.enabled=true",[doctorId]);
+   const doctor=await client.query("SELECT p.room_id,p.queue_definition_id FROM public.doctor_profiles p JOIN public.staff_users s ON s.id=p.staff_user_id WHERE s.id=$1 AND s.role='doctor' AND s.active=true AND p.enabled=true",[doctorId]);
    if(!doctor.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Médico não cadastrado ou inativo"});}
    const occupied=await client.query("SELECT id FROM public.authorized_devices WHERE staff_user_id=$1 AND id<>$2 AND status='active'",[doctorId,device.id]);
    if(occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Médico já autorizado em outro computador"});}
    if(!roomId){await client.query("ROLLBACK");return res.status(400).json({error:"Selecione um consultório ativo para este dispositivo médico."});}
    const room=await client.query("SELECT id FROM public.rooms WHERE id=$1 AND active=true FOR SHARE",[roomId]);
    if(!room.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"O consultório selecionado não está disponível."});}
-   if(doctor.rows[0].room_id&&doctor.rows[0].room_id!==roomId){await client.query("ROLLBACK");return res.status(409).json({error:"Este médico está vinculado a outro consultório. Atualize o vínculo do profissional antes de autorizar."});}
+   if(!doctor.rows[0].queue_definition_id){await client.query("ROLLBACK");return res.status(409).json({error:"Este médico ainda não está associado a uma fila de atendimento. Vincule-o à fila em Filas de atendimento antes de autorizar o dispositivo."});}
+   if(doctor.rows[0].room_id&&doctor.rows[0].room_id!==roomId){await client.query("ROLLBACK");return res.status(409).json({error:"O médico já possui outro consultório vinculado à fila. Ajuste o consultório na configuração da fila antes de autorizar."});}
+   if(!doctor.rows[0].room_id){await client.query("UPDATE public.doctor_profiles SET room_id=$2 WHERE staff_user_id=$1",[doctorId,roomId]);}
    const roomOccupied=await client.query("SELECT id FROM public.authorized_devices WHERE room_id=$1 AND id<>$2 AND status='active' AND role='doctor' LIMIT 1",[roomId,device.id]);
    if(roomOccupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Este consultório já possui outro dispositivo médico autorizado."});}
    staffId=doctorId;assignedRoom=roomId;
   }else{assignedRoom=null;}
+  if(role==="attendant"){
+   if(!/^guich[eê]\s*\d+/i.test(name.trim())){await client.query("ROLLBACK");return res.status(400).json({error:"Identifique o computador da recepção como Guichê 1, Guichê 2, etc., para que a chamada mostre o destino correto."});}
+   const duplicate=await client.query("SELECT id FROM public.authorized_devices WHERE lower(name)=lower($1) AND id<>$2 AND status='active' AND role='attendant'",[name.trim(),device.id]);
+   if(duplicate.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Este guichê já está vinculado a outro dispositivo ativo."});}
+  }
   if(role!=="doctor"&&!synthetic)staffId=null;
   if(!staffId) {
    const staff=await client.query(`INSERT INTO public.staff_users(firebase_uid,display_name,role,active)
