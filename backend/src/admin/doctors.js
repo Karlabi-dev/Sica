@@ -63,6 +63,7 @@ export async function updateDoctor(req,res) {
  const client=await getPool().connect();
  try {
   await client.query("BEGIN");
+  const previous=await client.query("SELECT display_name,active FROM public.staff_users WHERE id=$1 AND role='doctor' FOR UPDATE",[req.params.id]);
   const s=await client.query("UPDATE public.staff_users SET display_name=$2,active=$3,updated_at=now() WHERE id=$1 AND role='doctor' RETURNING id",[req.params.id,name.trim(),active]);
   if(!s.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Médico não encontrado"});}
   if(!active){
@@ -72,8 +73,8 @@ export async function updateDoctor(req,res) {
   await client.query("UPDATE public.doctor_profiles SET enabled=$2,updated_at=now() WHERE staff_user_id=$1",[req.params.id,active]);
   await saveSchedule(client,req.params.id,schedule);
   if(!active) await client.query("UPDATE public.authorized_devices SET status='revoked' WHERE staff_user_id=$1 AND status='active'",[req.params.id]);
-  await client.query(`INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id)
-   VALUES($1,'doctor.updated','staff_user',$2)`,[req.staff.id,req.params.id]);
+  await client.query(`INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata)
+   VALUES($1,'doctor.updated','staff_user',$2,$3::jsonb)`,[req.staff.id,req.params.id,JSON.stringify({changedFields:[...(previous.rows[0]?.display_name!==name.trim()?["name"]:[]),...(previous.rows[0]?.active!==active?["active"]:[]),"schedule"],active})]);
   await client.query("COMMIT");return res.json({status:"updated"});
  }catch(e){await client.query("ROLLBACK").catch(()=>{});if(e.code==="23505")return res.status(409).json({error:"Consultório já ocupado"});return fail(res,e);}finally{client.release();}
 }
