@@ -1,3 +1,60 @@
 .patients-page{color:#29485b}.patients-heading h1{font-size:clamp(26px,3vw,34px);letter-spacing:-.03em}.patients-heading p:not(.admin-eyebrow){max-width:690px;line-height:1.6}.patients-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:22px}.patients-kpis>div{padding:20px;background:#fff;border:1px solid #e1ebf0;border-radius:14px;box-shadow:0 5px 22px #173e5708}.patients-kpis span,.patients-kpis small{display:block;color:#708b9a;font-size:12px}.patients-kpis strong{display:block;color:#20475e;font-size:30px;line-height:1.25;margin:7px 0}.patients-page .patients-list{border-radius:14px;padding:24px}.patients-section-heading{display:flex;justify-content:space-between;align-items:start;gap:14px}.patients-section-heading h2{font-size:21px;margin:0 0 5px}.patients-section-heading p{font-size:13px;color:#748c9a;margin:0}.patients-section-heading>span{border-radius:20px;background:#edf5f8;padding:8px 12px;color:#57798a;font-size:12px;white-space:nowrap}.patients-toolbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:22px 0 16px}.patients-toolbar label{display:grid;gap:7px;flex:1 1 210px;max-width:380px;color:#46677a;font-size:12px;font-weight:700}.patients-toolbar input,.patients-toolbar select{height:45px;width:100%;border:1px solid #d7e4eb;border-radius:9px;padding:9px 12px;color:#29485b;background:#fff;font:inherit;font-size:14px}.patients-toolbar button{height:45px}.patients-table{min-width:680px}.patients-table th{background:#f6f9fb;color:#748d9c;font-size:12px;padding:14px}.patients-table td{padding:14px;color:#476879;font-size:13px;vertical-align:middle}.patients-ticket{font-weight:800;letter-spacing:.04em;color:#147e9c;background:#eaf6f9;padding:8px 10px;border-radius:8px;white-space:nowrap}.patients-person{display:flex;align-items:center;gap:11px}.patients-avatar{display:grid;place-items:center;flex-shrink:0;width:38px;height:38px;border-radius:12px;background:#e6f3f8;color:#21839d;font-size:15px;font-weight:800}.patients-person strong,.patients-person small{display:block}.patients-person strong{color:#23485b;font-size:13px}.patients-person small{font-size:11px;color:#90a2ad;margin-top:4px}.patients-status{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:18px;font-size:11px;font-weight:800;white-space:nowrap}.patients-status:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}.patients-status.ongoing{background:#fff5e5;color:#a77423}.patients-status.done{background:#e8f7f0;color:#247f62}.patients-status.stopped{background:#fff0f0;color:#a34c51}.patients-status.neutral{background:#eef3f6;color:#607d8c}.patients-detail-button{border:1px solid #cce2eb;background:#f2fafd;color:#167e9e;padding:10px 13px;border-radius:8px;cursor:pointer;font-weight:700}.patients-detail-button:hover{background:#e3f4f9}.patients-detail-button:disabled{opacity:.5;cursor:wait}.patients-empty{padding:30px 16px;text-align:center;color:#8299a6;font-size:13px}.patients-feedback{padding:14px 16px;margin-bottom:18px;border-radius:10px;background:#fff0ef;color:#963e3e;border:1px solid #f1cecc}.patients-modal{width:min(880px,calc(100vw - 28px));max-width:880px;max-height:90vh;overflow-y:auto}.patients-modal .admin-modal-head{align-items:center}.patients-modal .admin-modal-head h2{margin:3px 0 0;font-size:21px}.patients-modal-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}.patients-modal-summary>div{padding:14px;border:1px solid #e0eaf0;background:#f8fbfc;border-radius:10px}.patients-modal-summary span,.patients-modal-summary strong{display:block}.patients-modal-summary span{color:#7a94a2;font-size:11px;margin-bottom:7px}.patients-modal-summary strong{color:#244a5e;font-size:13px}.patients-tracking{display:inline-block;color:#16829e;background:#eef8fa;border-radius:8px;padding:11px 13px;font-weight:700;font-size:13px;margin-bottom:14px}.patients-history-title{font-size:16px;margin:15px 0}.patients-history{display:grid;gap:0}.patients-event{display:flex;gap:14px;position:relative;padding:0 0 20px}.patients-event:not(:last-child):before{content:"";position:absolute;top:29px;bottom:0;left:14px;width:2px;background:#deebf1}.patients-event-number{z-index:1;flex:0 0 30px;height:30px;display:grid;place-items:center;border-radius:50%;background:#dff2f7;color:#137f9c;font-weight:800;font-size:12px}.patients-event-content{flex:1;min-width:0;border:1px solid #e3edf1;border-radius:11px;padding:15px}.patients-event-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.patients-event-content p{font-size:12px;color:#7b929f;margin:9px 0 13px}.patients-event-times{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.patients-event-times span{font-size:12px;color:#49697b}.patients-event-times b{display:block;font-size:11px;color:#91a4af;margin-bottom:4px}.patients-modal-actions{display:flex;justify-content:flex-end;margin-top:12px}@media(max-width:850px){.patients-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:550px){.patients-kpis{gap:8px}.patients-kpis>div{padding:14px}.patients-kpis strong{font-size:25px}.patients-page .patients-list{padding:15px}.patients-modal-summary{grid-template-columns:1fr}.patients-event-times{grid-template-columns:repeat(2,minmax(0,1fr))}.patients-section-heading{flex-wrap:wrap}}
 
 .patients-return-button{border:1px solid #cde2ea;border-radius:8px;background:#eef8fa;color:#147c97;padding:9px 12px;font-weight:700;font-size:12px;cursor:pointer;margin:0 0 14px}.patients-return-button:hover{background:#dff1f6}.patients-return-modal{max-width:520px;width:min(520px,calc(100vw - 28px))}.patients-return-modal p{font-size:13px;color:#668291;line-height:1.6}.patients-return-modal form{display:grid;gap:14px}.patients-return-modal label{display:grid;gap:8px;font-size:13px;font-weight:700;color:#365d71}.patients-return-modal textarea{width:100%;resize:vertical;padding:12px;border:1px solid #d5e4eb;border-radius:9px;font:inherit;font-size:14px}.patients-notice{background:#e9f8f0;color:#237a5d;border-color:#cde9d9}
+
+
+/* Modern patient operations experience */
+.patients-page{--p-ink:#18364b;--p-muted:#708798;--p-line:#e5edf3;--p-accent:#137c9a;color:var(--p-ink)}
+.patients-page .patients-heading{padding:24px 28px;margin-bottom:22px;background:linear-gradient(120deg,#133e57 0%,#205f78 68%,#247f8c 100%);border-radius:20px;box-shadow:0 16px 36px rgba(20,69,91,.12);display:flex;justify-content:space-between;align-items:center;gap:18px}
+.patients-heading h1{color:#fff!important;font-size:clamp(27px,3vw,37px);letter-spacing:-.04em;margin:7px 0}
+.patients-heading .admin-eyebrow{color:#9fe2df!important;letter-spacing:.15em}
+.patients-heading p:not(.admin-eyebrow){color:#d4e7ed!important;font-size:14px;margin:0}
+.patients-heading .admin-secondary{background:#ffffff17;border:1px solid #ffffff66;color:#fff;white-space:nowrap;border-radius:11px;padding:12px 17px}
+.patients-heading .admin-secondary:hover{background:#ffffff30}
+.patients-kpis{gap:16px;margin-bottom:24px}
+.patients-kpis>div{position:relative;overflow:hidden;border:1px solid #e5edf2;border-radius:17px;padding:22px;box-shadow:0 8px 24px rgba(17,65,91,.045);background:#fff;min-height:138px}
+.patients-kpis>div:after{content:"";position:absolute;right:-25px;top:-32px;width:100px;height:100px;border-radius:50%;background:#eff7fa}
+.patients-kpis>div:nth-child(2):after{background:#fff5e7}
+.patients-kpis>div:nth-child(3):after{background:#eef5ff}
+.patients-kpis>div:nth-child(4):after{background:#eaf8f0}
+.patients-kpis span,.patients-kpis strong,.patients-kpis small{position:relative;z-index:1}
+.patients-kpis span{font-size:12px;font-weight:700;color:#668295}
+.patients-kpis strong{font-size:36px;letter-spacing:-.05em;color:#163e58;margin:10px 0 5px}
+.patients-kpis small{color:#96a7b1}
+.patients-page .patients-list{border:1px solid #e3ecf2;border-radius:19px;padding:27px;box-shadow:0 10px 35px rgba(17,65,91,.04);background:#fff}
+.patients-section-heading h2{font-size:22px;letter-spacing:-.03em;color:#183d53}
+.patients-section-heading>span{background:#eaf5f8;color:#207d98;font-weight:750}
+.patients-toolbar{padding:18px;background:#f7fafc;border:1px solid #eaf0f4;border-radius:14px;gap:14px}
+.patients-toolbar label{font-size:12px;color:#486a7d}
+.patients-toolbar input,.patients-toolbar select{border-radius:11px;border:1px solid #dce8ee;min-height:46px;transition:border-color .2s,box-shadow .2s}
+.patients-toolbar input:focus,.patients-toolbar select:focus,.patients-return-modal textarea:focus{outline:0;border-color:#45a6bc;box-shadow:0 0 0 3px #45a6bc25}
+.patients-table{border-collapse:separate;border-spacing:0 7px}
+.patients-table th{background:transparent;color:#8196a4;font-size:11px;text-transform:uppercase;letter-spacing:.055em}
+.patients-table tbody tr{background:#fafcfd;transition:background .2s}
+.patients-table tbody tr:hover{background:#eff8fb}
+.patients-table td{border-top:1px solid #edf2f5;border-bottom:1px solid #edf2f5;padding:16px 14px}
+.patients-table td:first-child{border-left:1px solid #edf2f5;border-radius:12px 0 0 12px}
+.patients-table td:last-child{border-right:1px solid #edf2f5;border-radius:0 12px 12px 0}
+.patients-avatar{height:44px;width:44px;border-radius:14px;background:linear-gradient(135deg,#d8f1f6,#e6edf9);color:#1b718d;font-size:17px}
+.patients-person strong{font-size:14px}
+.patients-ticket{border:1px solid #d5edf2;background:#e9f7fa;color:#197c98;font-size:12px}
+.patients-detail-button{background:#fff;border:1px solid #c9e4eb;border-radius:10px;padding:11px 15px;white-space:nowrap;transition:all .2s}
+.patients-detail-button:hover{background:#dff2f7;transform:translateY(-1px)}
+.patients-detail-button span{margin-left:7px}
+.patients-status{font-size:11px;padding:8px 11px}
+.patients-modal{border-radius:20px;box-shadow:0 24px 80px #123b5530}
+.patients-modal-summary>div{background:#f6fafc;border-radius:13px;padding:17px}
+.patients-event-content{border-radius:14px;padding:18px;background:#fcfefe}
+.patients-event-top strong{font-size:15px;color:#1d445a}
+.patients-return-button,.patients-close-button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 13px;border-radius:9px;font-size:12px;font-weight:750;cursor:pointer;margin:0 8px 14px 0}
+.patients-return-button{background:#edf8fb;border:1px solid #c7e5ee;color:#147b99}
+.patients-close-button{background:#fff2f0;border:1px solid #f1d3ce;color:#a24642}
+.patients-close-button:hover{background:#ffe5e1}
+.patients-confirm-overlay{z-index:1100}
+.patients-return-modal{border-radius:19px;padding:24px}
+.patients-return-modal .admin-modal-head h2{font-size:23px;letter-spacing:-.03em;color:#183c54}
+.patients-return-modal textarea{min-height:105px;border-radius:11px}
+.patients-confirm-close{border:0;background:#a74742;color:#fff;border-radius:10px;padding:12px 17px;font-weight:750;cursor:pointer}
+.patients-confirm-close:hover:not(:disabled){background:#8c3431}
+.patients-confirm-close:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:700px){.patients-page .patients-heading{padding:22px;align-items:flex-start;flex-direction:column}.patients-page .patients-list{padding:16px}.patients-kpis{gap:10px}.patients-kpis>div{padding:17px;min-height:125px}.patients-kpis strong{font-size:29px}.patients-toolbar{padding:12px}.patients-table{min-width:730px}}
