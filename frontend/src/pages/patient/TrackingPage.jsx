@@ -65,8 +65,7 @@ export default function TrackingPage() {
           <section className="tracking-details" aria-label="Informações do atendimento">
             <p className="tracking-field-label">SUA ETAPA</p>
             <h2>{displayConfig.place}</h2>
-            <div className="tracking-stats"><div><span>Pessoas à frente</span><strong>{displayConfig.ahead}</strong></div><div><span>Tempo estimado</span><strong>{displayConfig.estimate}</strong></div></div>
-            <div className="tracking-next"><span>Próxima chamada</span><strong>{displayConfig.estimate === 'Agora' ? 'Agora' : 'Em breve'}</strong></div>
+            {displayConfig.kind==="waiting"&&displayConfig.ahead==="0"&&<div className="tracking-first-in-line" role="status"><span className="tracking-first-icon" aria-hidden="true">✓</span><div><strong>Você é a primeira pessoa da fila!</strong><p>Assim que os atendimentos começarem, você será chamada para {effectiveStage.startsWith("recepcao")?"a recepção":"o consultório"}.</p></div></div>}
           </section>
           {sharedCalled && <section className={`tracking-call-timer ${remaining === 0 ? 'tracking-call-timer--expired' : ''}`} aria-label="Tempo para chegar ao consultório"><span>{remaining === 0 ? 'TEMPO ESGOTADO' : 'TEMPO PARA CHEGAR AO CONSULTÓRIO'}</span><strong role="timer" aria-live="off">{formatRemaining(remaining)}</strong><p>{remaining === 0 ? 'Aguardando o médico decidir se encerra o atendimento. Permaneça atento às orientações.' : 'Você tem 2 minutos para ir ao consultório. Se não chegar a tempo, o médico poderá encerrar sua chamada.'}</p></section>}
           {sharedArrived && <aside className="tracking-notice tracking-notice--waiting"><strong>Chegada confirmada</strong><p>Você já está no consultório. Aguarde as orientações do médico.</p></aside>}
