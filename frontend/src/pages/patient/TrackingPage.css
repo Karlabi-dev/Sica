@@ -115,3 +115,5 @@
 .tracking-live .tracking-sticky{position:sticky!important;top:0;z-index:50;flex-shrink:0}
 .tracking-live .tracking-main{flex:1 0 auto!important;min-height:auto!important;overflow:visible!important;overscroll-behavior:auto!important;padding-bottom:44px}
 .tracking-live .tracking-professional-footer{position:static!important;flex:0 0 auto!important;margin-top:auto}
+
+.tracking-first-in-line{display:flex;align-items:flex-start;gap:14px;margin:20px 0 12px;padding:20px;border:1px solid #bce5da;border-radius:14px;background:linear-gradient(135deg,#ecfaf5,#f3fbfd);color:#205d61}.tracking-first-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:50%;background:#d0f1e4;color:#17785c;font-size:19px;font-weight:800}.tracking-first-in-line strong{display:block;font-size:1.08em;line-height:1.35;color:#155d59}.tracking-first-in-line p{margin:8px 0 0;font-size:.96em;line-height:1.65;color:#496e73}
