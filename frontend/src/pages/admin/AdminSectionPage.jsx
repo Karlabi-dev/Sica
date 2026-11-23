@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { getDemoRows, SECTION_META } from "./adminDemoData.js";
 import DevicesPage from "./DevicesPage.jsx";
 import DoctorsPage from "./DoctorsPage.jsx";
@@ -8,7 +8,6 @@ import AttendancePage from "./AttendancePage.jsx";
 import QueuesPage from "./QueuesPage.jsx";
 import AuditPage from "./AuditPage.jsx";
 import CatalogPage from "./CatalogPage.jsx";
-import AnalyticsPage from "./AnalyticsPage.jsx";
 import "./AdminPage.css";
 import "./AdminSectionPage.css";
 
@@ -25,7 +24,7 @@ function Settings() {
 
 export default function AdminSectionPage() {
   const { section: currentSection } = useParams();
-  if(currentSection==="relatorios") return <AnalyticsPage mode="reports"/>;
+  if(currentSection==="relatorios") return <Navigate to="/admin" replace/>;
   if(currentSection==="dispositivos") return <DevicesPage/>;
   if(currentSection==="profissionais") return <DoctorsPage/>;
   if(currentSection==="pacientes") return <PatientsPage/>;
