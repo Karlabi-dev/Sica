@@ -18,7 +18,7 @@ export async function adminAnalytics(req,res){
  JOIN public.queue_definitions q ON q.id=qs.definition_id
  WHERE e.enqueued_at>=current_date-($1::int-1)*interval '1 day'
  AND ($2::uuid IS NULL OR q.id=$2::uuid)
- AND ($3::text IS NULL OR q.stage_type=$3::text)
+ AND ($3::text IS NULL OR q.stage_type::text=$3::text)
  AND ($4::uuid IS NULL OR q.specialty_id=$4::uuid)
  AND ($5::text IS NULL OR e.status=$5::text)`;
  try{
@@ -52,7 +52,7 @@ export async function adminAnalytics(req,res){
     FROM public.queue_definitions q LEFT JOIN public.specialties s ON s.id=q.specialty_id
     LEFT JOIN (SELECT e.*,qs.definition_id ${scope}) e ON e.definition_id=q.id
     WHERE ($2::uuid IS NULL OR q.id=$2::uuid)
-    AND ($3::text IS NULL OR q.stage_type=$3::text)
+    AND ($3::text IS NULL OR q.stage_type::text=$3::text)
     AND ($4::uuid IS NULL OR q.specialty_id=$4::uuid)
     GROUP BY q.id,q.name,q.stage_type,s.name ORDER BY total DESC,q.name`,args),
    pool.query(`SELECT q.stage_type AS stage,count(e.id)::int AS total,
