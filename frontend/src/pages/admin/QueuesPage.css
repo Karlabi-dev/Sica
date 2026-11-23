@@ -5,3 +5,5 @@
 .queue-search-feedback{margin:-8px 0 0;color:#688698;font-size:12px;line-height:1.5}.queue-doctor-search input[type=search]{appearance:auto}
 
 .queue-inline-warning{flex-basis:100%;margin:6px 0 0;padding:11px 13px;border:1px solid #f0d1b8;border-radius:9px;background:#fff8ed;color:#925e2b;font-size:12px;line-height:1.5;max-width:360px}.queue-inline-warning strong{display:block;color:#8b4b19;margin-bottom:3px}
+
+.queue-delete-button{border:1px solid #f0caca;background:#fff6f6;color:#a43f49;padding:10px 12px;border-radius:8px;cursor:pointer;white-space:nowrap}.queue-delete-button:hover:not(:disabled){background:#fceaea}.queue-delete-button:disabled{opacity:.45;cursor:not-allowed}
