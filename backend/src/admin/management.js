@@ -35,6 +35,39 @@ export async function adminPatientJourney(req,res){
   return res.json({journey:safe,events:rows,trackingToken});
  }catch(e){return fail(res,e);}
 }
+export async function adminReturnToQueue(req,res){
+ res.set("Cache-Control","no-store");if(!admin(req,res))return;
+ const {entryId}=req.params;const reason=typeof req.body?.reason==="string"?req.body.reason.trim():"";
+ if(!uuid(entryId)||reason.length<10||reason.length>300)return res.status(400).json({error:"Informe um motivo entre 10 e 300 caracteres."});
+ const client=await getPool().connect();
+ try{
+  await client.query("BEGIN");
+  const result=await client.query(`SELECT e.id,e.queue_id,e.journey_id,e.status,e.service_started_at,e.legal_priority,
+    qd.active AS queue_active,qs.status AS session_status,qi.active AS instance_active,j.status AS journey_status
+    FROM public.queue_entries e
+    JOIN public.queue_instances qi ON qi.id=e.queue_id
+    JOIN public.queue_sessions qs ON qs.id=qi.session_id
+    JOIN public.queue_definitions qd ON qd.id=qs.definition_id
+    JOIN public.patient_journeys j ON j.id=e.journey_id
+    WHERE e.id=$1 FOR UPDATE OF e,j`,[entryId]);
+  const e=result.rows[0];
+  if(!e){await client.query("ROLLBACK");return res.status(404).json({error:"Atendimento não encontrado"});}
+  if(!["called","no_show"].includes(e.status)||e.service_started_at||["completed","cancelled"].includes(e.journey_status)){
+   await client.query("ROLLBACK");return res.status(409).json({error:"Somente pacientes chamados ou ausentes, sem atendimento iniciado, podem voltar à fila."});
+  }
+  if(!e.queue_active||!e.instance_active||e.session_status!=="active"){
+   await client.query("ROLLBACK");return res.status(409).json({error:"A fila não está ativa. Não é possível devolver o paciente."});
+  }
+  const duplicate=await client.query("SELECT 1 FROM public.queue_entries WHERE journey_id=$1 AND id<>$2 AND status IN ('waiting','called','in_service') LIMIT 1",[e.journey_id,entryId]);
+  if(duplicate.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"O paciente já possui outro atendimento ativo."});}
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))",["admin-return:"+e.queue_id]);
+  const first=await client.query("SELECT MIN(enqueued_at) AS first FROM public.queue_entries WHERE queue_id=$1 AND status='waiting' AND legal_priority=$2",[e.queue_id,e.legal_priority]);
+  const position=first.rows[0].first?new Date(new Date(first.rows[0].first).getTime()-1000):new Date();
+  await client.query("UPDATE public.queue_entries SET status='waiting',enqueued_at=$2,called_at=NULL,service_started_at=NULL,service_finished_at=NULL WHERE id=$1",[entryId,position]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'patient.returned_to_queue','queue_entry',$2,$3::jsonb)",[req.staff.id,entryId,JSON.stringify({reason,previousStatus:e.status,queueId:e.queue_id})]);
+  await client.query("COMMIT");return res.json({status:"waiting",message:"Paciente devolvido à fila, com prioridade dentro da sua categoria."});
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});console.error("Admin return to queue failed",{code:e.code??"UNKNOWN"});return res.status(503).json({error:"Não foi possível devolver o paciente à fila."});}finally{client.release();}
+}
 export async function adminAudit(req,res){
  res.set("Cache-Control","no-store");if(!admin(req,res))return;
  const action=typeof req.query.action==="string"?req.query.action.slice(0,100):"";
