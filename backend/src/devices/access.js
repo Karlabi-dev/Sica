@@ -67,7 +67,7 @@ export async function listDevices(req,res) {
 }
 export async function approveDevice(req,res) {
  if(req.staff?.role!=="admin") return res.status(403).json({error:"Somente administradores"});
- const {name,role,roomId,doctorId}=req.body??{};
+ const {name,role,roomId}=req.body??{};
  if(typeof name!=="string"||!name.trim()||name.trim().length>120||!["attendant","doctor"].includes(role)) return res.status(400).json({error:"Nome e função inválidos"});
  if(roomId!=null&&!/^[0-9a-f-]{36}$/i.test(roomId)) return res.status(400).json({error:"Sala inválida"});
  const client=await getPool().connect();
@@ -81,28 +81,16 @@ export async function approveDevice(req,res) {
   const previousStaff=previousStaffId?await client.query("SELECT firebase_uid FROM public.staff_users WHERE id=$1",[previousStaffId]):{rows:[]};
   const synthetic=previousStaff.rows[0]?.firebase_uid?.startsWith("device:")??false;
   let assignedRoom=roomId??null;
-  if(role==="doctor") {
-   if(typeof doctorId!=="string"||!/^[0-9a-f-]{36}$/i.test(doctorId)){await client.query("ROLLBACK");return res.status(400).json({error:"Selecione um médico cadastrado"});}
-   const doctor=await client.query("SELECT p.room_id,p.queue_definition_id FROM public.doctor_profiles p JOIN public.staff_users s ON s.id=p.staff_user_id WHERE s.id=$1 AND s.role='doctor' AND s.active=true AND p.enabled=true",[doctorId]);
-   if(!doctor.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Médico não cadastrado ou inativo"});}
-   const occupied=await client.query("SELECT id FROM public.authorized_devices WHERE staff_user_id=$1 AND id<>$2 AND status='active'",[doctorId,device.id]);
-   if(occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Médico já autorizado em outro computador"});}
-   if(!roomId){await client.query("ROLLBACK");return res.status(400).json({error:"Selecione um consultório ativo para este dispositivo médico."});}
+  if(role==="doctor"){
+   if(!roomId){await client.query("ROLLBACK");return res.status(400).json({error:"Selecione um consultório cadastrado."});}
    const room=await client.query("SELECT id FROM public.rooms WHERE id=$1 AND active=true FOR SHARE",[roomId]);
-   if(!room.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"O consultório selecionado não está disponível."});}
-   if(!doctor.rows[0].queue_definition_id){await client.query("ROLLBACK");return res.status(409).json({error:"Este médico ainda não está associado a uma fila de atendimento. Vincule-o à fila em Filas de atendimento antes de autorizar o dispositivo."});}
-   if(doctor.rows[0].room_id&&doctor.rows[0].room_id!==roomId){await client.query("ROLLBACK");return res.status(409).json({error:"O médico já possui outro consultório vinculado à fila. Ajuste o consultório na configuração da fila antes de autorizar."});}
-   if(!doctor.rows[0].room_id){await client.query("UPDATE public.doctor_profiles SET room_id=$2 WHERE staff_user_id=$1",[doctorId,roomId]);}
-   const roomOccupied=await client.query("SELECT id FROM public.authorized_devices WHERE room_id=$1 AND id<>$2 AND status='active' AND role='doctor' LIMIT 1",[roomId,device.id]);
-   if(roomOccupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Este consultório já possui outro dispositivo médico autorizado."});}
-   staffId=doctorId;assignedRoom=roomId;
+   if(!room.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"O consultório está inativo ou não existe."});}
+   const occupied=await client.query("SELECT id FROM public.authorized_devices WHERE room_id=$1 AND id<>$2 AND status='active' AND role='doctor' LIMIT 1",[roomId,device.id]);
+   if(occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Este consultório já possui outro dispositivo autorizado."});}
+   assignedRoom=roomId;
   }else{assignedRoom=null;}
-  if(role==="attendant"){
-   if(!/^guich[eê]\s*\d+/i.test(name.trim())){await client.query("ROLLBACK");return res.status(400).json({error:"Identifique o computador da recepção como Guichê 1, Guichê 2, etc., para que a chamada mostre o destino correto."});}
-   const duplicate=await client.query("SELECT id FROM public.authorized_devices WHERE lower(name)=lower($1) AND id<>$2 AND status='active' AND role='attendant'",[name.trim(),device.id]);
-   if(duplicate.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Este guichê já está vinculado a outro dispositivo ativo."});}
-  }
-  if(role!=="doctor"&&!synthetic)staffId=null;
+  // Identidade técnica independente do profissional que usa o consultório.
+  if(!synthetic)staffId=null;
   if(!staffId) {
    const staff=await client.query(`INSERT INTO public.staff_users(firebase_uid,display_name,role,active)
      VALUES($1,$2,$3,true)
@@ -113,12 +101,12 @@ export async function approveDevice(req,res) {
        updated_at=now()
      RETURNING id`,["device:"+device.id,name.trim(),role]);
    staffId=staff.rows[0].id;
-  }else if(role!=="doctor"){
+  }else{
    await client.query("UPDATE public.staff_users SET display_name=$2,role=$3,active=true,updated_at=now() WHERE id=$1",[staffId,name.trim(),role]);
   }
   if(previousStaffId&&previousStaffId!==staffId&&synthetic)await client.query("UPDATE public.staff_users SET active=false WHERE id=$1",[previousStaffId]);
   await client.query(`UPDATE public.authorized_devices SET name=$2,role=$3,room_id=$4,staff_user_id=$5,status='active',approved_at=now(),approved_by=$6 WHERE id=$1`,[device.id,name.trim(),role,assignedRoom,staffId,req.staff.id]);
-  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'device.approved','authorized_device',$2,$3::jsonb)",[req.staff.id,device.id,JSON.stringify({role,roomId:assignedRoom,doctorId:role==="doctor"?doctorId:null})]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'device.approved','authorized_device',$2,$3::jsonb)",[req.staff.id,device.id,JSON.stringify({role,roomId:assignedRoom,doctorId:null})]);
   await client.query("COMMIT");
   return res.json({status:"active"});
  }catch(err){await client.query("ROLLBACK").catch(()=>{});return failure(res,err);}finally{client.release();}
