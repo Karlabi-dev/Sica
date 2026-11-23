@@ -87,8 +87,14 @@ export async function approveDevice(req,res) {
    if(!doctor.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Médico não cadastrado ou inativo"});}
    const occupied=await client.query("SELECT id FROM public.authorized_devices WHERE staff_user_id=$1 AND id<>$2 AND status='active'",[doctorId,device.id]);
    if(occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Médico já autorizado em outro computador"});}
-   staffId=doctorId;assignedRoom=doctor.rows[0].room_id;
-  }
+   if(!roomId){await client.query("ROLLBACK");return res.status(400).json({error:"Selecione um consultório ativo para este dispositivo médico."});}
+   const room=await client.query("SELECT id FROM public.rooms WHERE id=$1 AND active=true FOR SHARE",[roomId]);
+   if(!room.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"O consultório selecionado não está disponível."});}
+   if(doctor.rows[0].room_id&&doctor.rows[0].room_id!==roomId){await client.query("ROLLBACK");return res.status(409).json({error:"Este médico está vinculado a outro consultório. Atualize o vínculo do profissional antes de autorizar."});}
+   const roomOccupied=await client.query("SELECT id FROM public.authorized_devices WHERE room_id=$1 AND id<>$2 AND status='active' AND role='doctor' LIMIT 1",[roomId,device.id]);
+   if(roomOccupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Este consultório já possui outro dispositivo médico autorizado."});}
+   staffId=doctorId;assignedRoom=roomId;
+  }else{assignedRoom=null;}
   if(role!=="doctor"&&!synthetic)staffId=null;
   if(!staffId) {
    const staff=await client.query(`INSERT INTO public.staff_users(firebase_uid,display_name,role,active)
@@ -105,6 +111,7 @@ export async function approveDevice(req,res) {
   }
   if(previousStaffId&&previousStaffId!==staffId&&synthetic)await client.query("UPDATE public.staff_users SET active=false WHERE id=$1",[previousStaffId]);
   await client.query(`UPDATE public.authorized_devices SET name=$2,role=$3,room_id=$4,staff_user_id=$5,status='active',approved_at=now(),approved_by=$6 WHERE id=$1`,[device.id,name.trim(),role,assignedRoom,staffId,req.staff.id]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'device.approved','authorized_device',$2,$3::jsonb)",[req.staff.id,device.id,JSON.stringify({role,roomId:assignedRoom,doctorId:role==="doctor"?doctorId:null})]);
   await client.query("COMMIT");
   return res.json({status:"active"});
  }catch(err){await client.query("ROLLBACK").catch(()=>{});return failure(res,err);}finally{client.release();}
@@ -118,6 +125,7 @@ export async function revokeDevice(req,res) {
   if(!rows.length){await client.query("ROLLBACK");return res.status(404).json({error:"Dispositivo não encontrado"});}
   await client.query("UPDATE public.authorized_devices SET status='revoked' WHERE id=$1",[req.params.id]);
   if(rows[0].staff_user_id) await client.query("UPDATE public.staff_users SET active=false WHERE id=$1 AND firebase_uid LIKE 'device:%'",[rows[0].staff_user_id]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,'device.revoked','authorized_device',$2)",[req.staff.id,req.params.id]);
   await client.query("COMMIT");
   return res.json({status:"revoked"});
  }catch(err){await client.query("ROLLBACK").catch(()=>{});return failure(res,err);}finally{client.release();}
