@@ -1,4 +1,14 @@
 const ACTIONS={
+ "medical.call":["Paciente chamado pelo médico","Consultas médicas"],
+ "medical.arrival":["Início da consulta confirmado","Consultas médicas"],
+ "medical.complete":["Consulta finalizada pelo médico","Consultas médicas"],
+ "medical.return":["Paciente encaminhado de volta à recepção","Consultas médicas"],
+ "medical.no-show":["Ausência do paciente registrada pelo médico","Consultas médicas"],
+ "reception.call":["Paciente chamado na recepção","Recepção"],
+ "reception.arrival":["Chegada confirmada na recepção","Recepção"],
+ "reception.handoff":["Paciente encaminhado para atendimento","Recepção"],
+ "clinic.settings.updated":["Configurações da clínica atualizadas","Configurações"],
+ "doctor.archived":["Profissional arquivado para preservar histórico","Profissionais"],
  "patient.history.viewed":["Consulta ao histórico do paciente","Pacientes"],
  "patient.returned_to_queue":["Paciente devolvido à fila","Atendimentos"],
  "attendance.administratively_closed":["Atendimento encerrado pela administração","Atendimentos"],
@@ -18,7 +28,7 @@ const ACTIONS={
  "patient.transferred":["Paciente encaminhado","Atendimentos"]
 };
 const RESOURCES={patient_journey:"Jornada do paciente",queue_entry:"Atendimento na fila",queue_definition:"Fila de atendimento",queue:"Fila",doctor:"Profissional",staff_user:"Usuário da equipe",specialties:"Especialidades",specialty:"Especialidade",rooms:"Consultórios",room:"Consultório",patient:"Paciente",device:"Dispositivo",queue_session:"Sessão de atendimento"};
-const ROLES={admin:"Administrador",doctor:"Médico",reception:"Recepção",kiosk:"Totem",staff:"Colaborador"};
+const ROLES={admin:"Administrador",doctor:"Médico",reception:"Recepção",kiosk:"Totem",staff:"Colaborador",attendant:"Atendente"};
 const VERBS={created:"Cadastrado",updated:"Atualizado",deleted:"Excluído",activated:"Ativado",deactivated:"Desativado",viewed:"Consultado",configured:"Configurado",called:"Chamado",completed:"Concluído",cancelled:"Cancelado",returned:"Devolvido",linked:"Vinculado",unlinked:"Desvinculado",started:"Iniciado",finished:"Finalizado",closed:"Encerrado",opened:"Aberto",logged_in:"Acesso realizado",failed:"Tentativa não concluída",status:"Situação alterada"};
 function pretty(text){return String(text??"").replace(/[_-]+/g," ").replace(/\b\w/g,s=>s.toUpperCase());}
 export function describeAction(event){
