@@ -36,7 +36,7 @@ export async function adminAnalytics(req,res){
     count(DISTINCT e.journey_id)::int AS journeys,
     round(avg(extract(epoch FROM (e.service_started_at-e.enqueued_at))/60) FILTER(WHERE e.service_started_at>=e.enqueued_at)::numeric,1)::float AS avg_wait_minutes,
     round(avg(extract(epoch FROM (e.service_finished_at-e.service_started_at))/60) FILTER(WHERE e.service_finished_at>=e.service_started_at)::numeric,1)::float AS avg_service_minutes
-    \${scope}`,args),
+    ${scope}`,args),
    pool.query(`SELECT to_char(d.day,'YYYY-MM-DD') AS day,count(e.id)::int AS total,
     count(e.id) FILTER(WHERE e.status='completed')::int AS completed,
     count(e.id) FILTER(WHERE e.status='cancelled')::int AS cancelled
