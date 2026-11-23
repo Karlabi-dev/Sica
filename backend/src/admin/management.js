@@ -68,6 +68,28 @@ export async function adminReturnToQueue(req,res){
   await client.query("COMMIT");return res.json({status:"waiting",message:"Paciente devolvido à fila, com prioridade dentro da sua categoria."});
  }catch(e){await client.query("ROLLBACK").catch(()=>{});console.error("Admin return to queue failed",{code:e.code??"UNKNOWN"});return res.status(503).json({error:"Não foi possível devolver o paciente à fila."});}finally{client.release();}
 }
+export async function adminCloseAttendance(req,res){
+ res.set("Cache-Control","no-store");if(!admin(req,res))return;
+ const {entryId}=req.params;const reason=typeof req.body?.reason==="string"?req.body.reason.trim():"";
+ if(!uuid(entryId)||reason.length<10||reason.length>300)return res.status(400).json({error:"Informe um motivo entre 10 e 300 caracteres."});
+ const client=await getPool().connect();
+ try{
+  await client.query("BEGIN");
+  const result=await client.query(`SELECT e.id,e.status,e.journey_id,e.queue_id,j.status AS journey_status
+    FROM public.queue_entries e JOIN public.patient_journeys j ON j.id=e.journey_id
+    WHERE e.id=$1 FOR UPDATE OF j,e`,[entryId]);
+  const entry=result.rows[0];
+  if(!entry){await client.query("ROLLBACK");return res.status(404).json({error:"Atendimento não encontrado."});}
+  if(!["waiting","called","in_service"].includes(entry.status)||["completed","cancelled"].includes(entry.journey_status)){
+   await client.query("ROLLBACK");return res.status(409).json({error:"Este atendimento não está ativo ou a jornada já foi encerrada."});
+  }
+  await client.query("UPDATE public.queue_entries SET status='cancelled',service_finished_at=now() WHERE id=$1",[entryId]);
+  const other=await client.query("SELECT 1 FROM public.queue_entries WHERE journey_id=$1 AND id<>$2 AND status IN ('waiting','called','in_service') LIMIT 1",[entry.journey_id,entryId]);
+  if(!other.rowCount)await client.query("UPDATE public.patient_journeys SET status='cancelled',completed_at=now(),tracking_revoked_at=now() WHERE id=$1",[entry.journey_id]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'attendance.administratively_closed','queue_entry',$2,$3::jsonb)",[req.staff.id,entryId,JSON.stringify({reason,previousStatus:entry.status,journeyId:entry.journey_id,queueId:entry.queue_id})]);
+  await client.query("COMMIT");return res.json({status:"cancelled",message:"Atendimento encerrado administrativamente. Não representa conclusão clínica."});
+ }catch(error){await client.query("ROLLBACK").catch(()=>{});console.error("Admin attendance close failed",{code:error.code??"UNKNOWN"});return res.status(503).json({error:"Não foi possível encerrar o atendimento."});}finally{client.release();}
+}
 export async function adminAudit(req,res){
  res.set("Cache-Control","no-store");if(!admin(req,res))return;
  const action=typeof req.query.action==="string"?req.query.action.slice(0,100):"";
