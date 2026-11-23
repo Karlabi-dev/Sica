@@ -2,6 +2,7 @@ import {useEffect,useMemo,useState} from "react";
 import {adminApi} from "./adminApi.js";
 import "./QueuesPage.css";
 
+const normalizeName=value=>String(value??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR").trim().replace(/\s+/g," ");
 const initialForm={name:"",specialtyId:"",doctorIds:[],queueMode:"shared",active:true,roomAssignments:{}};
 export default function QueuesPage(){
  const [data,setData]=useState({specialties:[],doctors:[],queues:[],rooms:[]});
@@ -17,7 +18,8 @@ export default function QueuesPage(){
  useEffect(()=>{load();},[]);
  const doctors=useMemo(()=>data.doctors.filter(d=>d.active),[data.doctors]);
  const selected=doctors.filter(d=>form.doctorIds.includes(d.id));
- const available=doctors.filter(d=>!form.doctorIds.includes(d.id)&&d.display_name.toLocaleLowerCase("pt-BR").includes(doctorSearch.toLocaleLowerCase("pt-BR")));
+ const searchTerms=normalizeName(doctorSearch).split(" ").filter(Boolean);
+ const available=doctors.filter(d=>!form.doctorIds.includes(d.id)&&searchTerms.every(term=>normalizeName(d.display_name).includes(term)));
  const filtered=data.queues.filter(q=>(filter==="all"||(filter==="active"?q.active:!q.active))&&[q.name,q.specialty_name].some(x=>(x??"").toLocaleLowerCase("pt-BR").includes(search.toLocaleLowerCase("pt-BR"))));
  const assignedCount=data.queues.filter(q=>data.doctors.some(d=>d.queue_definition_id===q.id)).length;
  const reset=()=>{setEditingQueue(null);setForm(initialForm);setDoctorSearch("");};
@@ -75,8 +77,8 @@ export default function QueuesPage(){
      </div>
      <div className="queue-divider"/>
      <div className="queue-field-heading"><div><h3>Profissionais vinculados</h3><p>{form.queueMode==="shared"?"Adicione quantos médicos precisar, agora ou depois.":"Selecione um médico para esta fila individual."}</p></div><span className="queue-count">{selected.length} selecionado{selected.length===1?"":"s"}</span></div>
-     <label className="queue-doctor-search">Buscar médico<input value={doctorSearch} onChange={e=>setDoctorSearch(e.target.value)} placeholder="Digite o nome do profissional"/></label>
-     <label className="queue-doctor-select">Adicionar profissional<select value="" disabled={form.queueMode==="individual"&&form.doctorIds.length>=1} onChange={e=>add(e.target.value)}><option value="">Selecione um médico cadastrado</option>{available.map(d=><option key={d.id} value={d.id}>{d.display_name}</option>)}</select></label>
+     <label className="queue-doctor-search">Buscar médico<input type="search" autoComplete="off" value={doctorSearch} onChange={e=>setDoctorSearch(e.target.value)} placeholder="Nome completo ou parte do nome" aria-controls="queue-doctor-select"/></label>
+     <label className="queue-doctor-select">Adicionar profissional<select id="queue-doctor-select" key={doctorSearch} value="" disabled={form.queueMode==="individual"&&form.doctorIds.length>=1} onChange={e=>add(e.target.value)}><option value="">{available.length?`Selecione um médico (${available.length} disponível${available.length===1?"":"is"})`:"Nenhum médico encontrado"}</option>{available.map(d=><option key={d.id} value={d.id}>{d.display_name}</option>)}</select></label><p className="queue-search-feedback" role="status" aria-live="polite">{doctorSearch.trim()?`${available.length} médico${available.length===1?"":"s"} encontrado${available.length===1?"":"s"} para “${doctorSearch.trim()}”.`:"Digite para filtrar os médicos por nome; o seletor será atualizado automaticamente."}</p>
      <div className="queue-room-assignments">{selected.map(d=><label key={d.id}>Consultório de {d.display_name}<select required value={form.roomAssignments[d.id]??""} onChange={e=>setForm(f=>({...f,roomAssignments:{...f.roomAssignments,[d.id]:e.target.value}}))}><option value="">Selecione um consultório</option>{data.rooms?.filter(room=>(room.active||room.id===form.roomAssignments[d.id])&&!selected.some(other=>other.id!==d.id&&form.roomAssignments[other.id]===room.id)).map(room=><option key={room.id} value={room.id}>{room.name}</option>)}</select></label>)}</div>
      <div className="queue-selected">
       {selected.length?selected.map(d=><div className="queue-doctor-chip" key={d.id}><span className="queue-avatar">{d.display_name.trim().charAt(0).toUpperCase()}</span><span>{d.display_name}</span><button type="button" aria-label={"Remover "+d.display_name} onClick={()=>setForm(f=>({...f,doctorIds:f.doctorIds.filter(id=>id!==d.id)}))}>×</button></div>):<div className="queue-empty-doctors">Nenhum médico selecionado. {form.queueMode==="shared"?"Você pode criar a fila e vincular a equipe posteriormente.":"Selecione um profissional para continuar."}</div>}
