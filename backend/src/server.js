@@ -10,6 +10,7 @@ import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js"
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
 import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, receptionTrackingLink } from "./reception/operations.js";
 
+import { adminAnalytics } from "./admin/analytics.js";
 import { adminAttendance, adminAttendanceTracking } from "./admin/attendance.js";
 import { adminPatients, adminPatientJourney, adminReturnToQueue, adminCloseAttendance, adminAudit, adminCatalog, adminCatalogWrite, adminCatalogDelete, adminSeedSpecialties, adminQueuesWrite } from "./admin/management.js";
 import { updateQueueDoctors, changeQueueStatus, deleteQueue } from "./admin/queueDoctors.js";
@@ -61,6 +62,7 @@ app.post("/public/kiosk/tickets", rateLimit({windowMs:60000,max:15}), issueKiosk
 app.get("/public/track/:token", trackTicket);
 app.post("/devices/request", rateLimit({windowMs:3600000,max:8}), requestDevice);
 app.get("/devices/status", deviceStatus);
+app.get("/admin/analytics",staffAuth,adminAnalytics);
 app.get("/admin/attendance",staffAuth,adminAttendance);
 app.post("/admin/attendance/:entryId/tracking-link",staffAuth,adminAttendanceTracking);
 app.get("/admin/patients",staffAuth,adminPatients);
