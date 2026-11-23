@@ -20,12 +20,13 @@ export async function receptionOverview(req,res) {
         WHERE qd.active=true GROUP BY qd.id,qd.name,qd.stage_type ORDER BY qd.stage_type,qd.name`),
       pool.query(`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,e.journey_id,
         qd.name AS queue_name,qd.stage_type,p.full_name AS patient_name,p.phone AS patient_phone,
-        rm.name AS destination_name
+        COALESCE(rm.name,desk.name) AS destination_name
         FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id
         JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions qd ON qd.id=qs.definition_id
         JOIN public.patient_journeys j ON j.id=e.journey_id LEFT JOIN public.patients p ON p.id=j.patient_id
-        LEFT JOIN LATERAL (SELECT room_id FROM public.call_events WHERE queue_entry_id=e.id ORDER BY called_at DESC LIMIT 1) ce ON true
+        LEFT JOIN LATERAL (SELECT room_id,called_by FROM public.call_events WHERE queue_entry_id=e.id ORDER BY called_at DESC LIMIT 1) ce ON true
         LEFT JOIN public.rooms rm ON rm.id=ce.room_id
+        LEFT JOIN public.authorized_devices desk ON desk.staff_user_id=ce.called_by AND desk.role='attendant' AND desk.status='active'
         WHERE qs.status='active' AND e.status IN ('waiting','called','in_service','no_show','transferred')
         ORDER BY CASE WHEN e.status='waiting' THEN 0 ELSE 1 END,e.legal_priority DESC,e.enqueued_at ASC LIMIT 300`)
     ]);
