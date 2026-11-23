@@ -20,7 +20,7 @@ const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_cat
 export async function medicalOverview(req,res){
  res.set("Cache-Control","no-store");if(deny(req,res))return;
  try{const pool=getPool();const doctor=(await pool.query(scope,[req.staff.id])).rows[0];
-  if(!doctor)return res.status(409).json({error:"Este computador ainda não está vinculado a um médico cadastrado. Solicite ao administrador a vinculação."});
+  if(!doctor)return res.status(409).json({error:"O médico deste dispositivo precisa estar ativo, vinculado a uma fila de atendimento e a um consultório ativo. Confira os vínculos em Filas de atendimento e Dispositivos autorizados."});
   const result=await pool.query(entries,[doctor.queue_definition_id,doctor.queue_mode,req.staff.id]);
   return res.json({doctor,entries:result.rows});
  }catch(e){return fail(res,e);}
