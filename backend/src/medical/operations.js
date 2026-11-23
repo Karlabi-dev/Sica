@@ -53,8 +53,10 @@ export async function medicalAction(req,res){
   }else if(action==="arrival"){
    await client.query("UPDATE public.queue_entries SET status='in_service',service_started_at=now() WHERE id=$1",[entryId]);
   }else if(action==="no-show"){
-   const late=await client.query("SELECT called_at<=now()-interval '2 minutes' AS expired FROM public.queue_entries WHERE id=$1",[entryId]);
-   if(!late.rows[0]?.expired){await client.query("ROLLBACK");return res.status(409).json({error:"Aguarde os dois minutos antes de registrar ausência"});}
+   const tolerance=await client.query("SELECT COALESCE((preferences->>'arrivalToleranceMinutes')::int,2) AS minutes FROM public.clinic_settings WHERE id=1");
+   const minutes=Math.max(1,Math.min(30,tolerance.rows[0]?.minutes??2));
+   const late=await client.query("SELECT called_at<=now()-($2::int*interval '1 minute') AS expired FROM public.queue_entries WHERE id=$1",[entryId,minutes]);
+   if(!late.rows[0]?.expired){await client.query("ROLLBACK");return res.status(409).json({error:`Aguarde ${minutes} minuto(s) após a chamada antes de registrar ausência.`});}
    await client.query("UPDATE public.queue_entries SET status='no_show',service_finished_at=now() WHERE id=$1",[entryId]);
   }else if(action==="complete"){
    await client.query("UPDATE public.queue_entries SET status='completed',service_finished_at=now() WHERE id=$1",[entryId]);
