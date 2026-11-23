@@ -1,5 +1,4 @@
 import {useEffect,useMemo,useState} from "react";
-import {Link} from "react-router-dom";
 import {adminApi} from "./adminApi.js";
 import "./AnalyticsPage.css";
 const number=n=>new Intl.NumberFormat("pt-BR").format(Number(n)||0);
@@ -8,7 +7,7 @@ const percent=(a,b)=>b?new Intl.NumberFormat("pt-BR",{maximumFractionDigits:1}).
 const stage={reception:"Recepção",consultation:"Consulta",triage:"Triagem",exam:"Exames"};
 const status={waiting:"Aguardando",called:"Chamado",in_service:"Em atendimento",completed:"Concluído",transferred:"Encaminhado",cancelled:"Cancelado",no_show:"Ausente"};
 const esc=v=>String(v??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
-const csvCell=v=>'"'+String(v??"").replace(/"/g,'""')+'"';
+const csvCell=v=>{const value=String(v??"");return '"'+(/^[\\s]*[=+@-]/.test(value)?"'":"")+value.replace(/"/g,'""')+'"';};
 function saveFile(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function csvExport(data,mode){
  const rows=[["Relatório SICA",mode==="dashboard"?"Dashboard":"Análise gerencial"],["Período (dias)",data.periodDays],["Gerado em",new Date(data.generatedAt).toLocaleString("pt-BR")],["Fila",data.appliedFilters?.queue||"Todas"],["Especialidade",data.appliedFilters?.specialty||"Todas"],["Etapa",data.appliedFilters?.stage||"Todas"],["Situação",data.appliedFilters?.status||"Todas"],[],["INDICADORES"],["Atendimentos",data.summary.total],["Jornadas distintas",data.summary.journeys],["Concluídos",data.summary.completed],["Encaminhados",data.summary.transferred],["Cancelados",data.summary.cancelled],["Ausentes",data.summary.no_show],["Aguardando",data.summary.waiting],["Chamados",data.summary.called],["Em atendimento",data.summary.in_service],["Espera média (min)",data.summary.avg_wait_minutes],["Atendimento médio (min)",data.summary.avg_service_minutes],[],["ATENDIMENTOS POR DIA"],["Data","Total","Concluídos","Cancelados"],...data.daily.map(d=>[d.day,d.total,d.completed,d.cancelled]),[],["DESEMPENHO POR FILA"],["Fila","Etapa","Especialidade","Total","Concluídos","Ativos","Cancelados","Espera média (min)","Atendimento médio (min)"],...data.queues.map(q=>[q.name,stage[q.stage_type]??q.stage_type,q.specialty,q.total,q.completed,q.active,q.cancelled,q.avg_wait_minutes,q.avg_service_minutes]),[],["DISTRIBUIÇÃO POR SITUAÇÃO"],["Situação","Total"],...data.statuses.map(s=>[status[s.status]??s.status,s.total])];
