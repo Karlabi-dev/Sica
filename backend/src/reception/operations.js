@@ -64,10 +64,10 @@ export async function receptionArrival(req,res) {
   const {entryId}=req.params;
   if (!/^[0-9a-f-]{36}$/i.test(entryId)) return res.status(400).json({error:"Senha inválida"});
   try {
-    const result=await getPool().query(`UPDATE public.queue_entries e SET status='in_service',service_started_at=now()
+    const result=await getPool().query(`WITH updated AS (UPDATE public.queue_entries e SET status='in_service',service_started_at=now()
       FROM public.queue_instances qi JOIN public.queue_sessions qs ON qs.id=qi.session_id
       JOIN public.queue_definitions qd ON qd.id=qs.definition_id
-      WHERE e.id=$1 AND e.queue_id=qi.id AND qd.stage_type='reception' AND e.status='called' RETURNING e.id`,[entryId]);
+      WHERE e.id=$1 AND e.queue_id=qi.id AND qd.stage_type='reception' AND e.status='called' RETURNING e.id) INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) SELECT $2,'reception.arrival','queue_entry',id FROM updated RETURNING resource_id`,[entryId,req.staff.id]);
     if (!result.rowCount) return res.status(409).json({error:"A senha não está chamada na recepção"});
     return res.json({status:"in_service"});
   } catch(error) {return fail(res,error);}
