@@ -52,6 +52,7 @@ export async function receptionCall(req,res) {
     if (active.rows.length) {await client.query("ROLLBACK");return res.status(409).json({error:"Conclua a chamada atual antes de chamar outra senha"});}
     await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[entryId]);
     await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,called_at) VALUES($1,$2,now())",[entryId,req.staff.id]);
+    await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,'reception.call','queue_entry',$2)",[req.staff.id,entryId]);
     await client.query("COMMIT");
     return res.json({status:"called"});
   } catch(error) {await client.query("ROLLBACK").catch(()=>{});return fail(res,error);} finally {client.release();}
@@ -120,6 +121,7 @@ export async function receptionHandoff(req,res) {
   await client.query("UPDATE public.queue_entries SET status='transferred',service_finished_at=now() WHERE id=$1",[entryId]);
   const next=await client.query(`INSERT INTO public.queue_entries(journey_id,queue_id,ticket_code,payment_category,legal_priority)
    VALUES($1,$2,$3,$4,$5) RETURNING id`,[entry.journey_id,instance.rows[0].id,entry.ticket_code,entry.payment_category,entry.legal_priority]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'reception.handoff','queue_entry',$2,$3::jsonb)",[req.staff.id,entryId,JSON.stringify({destinationQueueId:q.id,nextEntryId:next.rows[0].id})]);
   await client.query("COMMIT");
   return res.json({status:"transferred",entryId:next.rows[0].id,queueName:q.name,whatsappConfigured:false});
  }catch(error){await client.query("ROLLBACK").catch(()=>{});return fail(res,error);}finally{client.release();}
