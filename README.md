@@ -2,6 +2,22 @@
 
 Projeto da **DivoDevs** para gerenciamento de filas de atendimento em clínicas.
 
+## Acesso às páginas do SICA
+
+**Aplicação publicada:** https://sica-web.onrender.com
+
+| Área | Link direto | Acesso |
+| --- | --- | --- |
+| **Atendente / Recepção** | [Abrir recepção](https://sica-web.onrender.com/atendente) | Computador autorizado para recepção |
+| **Médico / Atendimento** | [Abrir atendimento médico](https://sica-web.onrender.com/medico) | Computador autorizado para atendimento médico |
+| **Administrador (ADM)** | [Abrir painel administrativo](https://sica-web.onrender.com/admin) | Autenticação de administrador |
+| **Totem / Emissão de senhas** | [Abrir totem](https://sica-web.onrender.com/totem) | Acesso público |
+| **TV / Painel de chamadas** | [Abrir painel de TV](https://sica-web.onrender.com/tv) | Visualização pública |
+
+Para solicitar a autorização de um computador, acesse [Autorizar computador](https://sica-web.onrender.com/autorizar-computador). A aprovação é feita pelo administrador em **Dispositivos autorizados**.
+
+> Os links apontam para o frontend hospedado no Render. O funcionamento depende de o serviço estar disponível e atualizado.
+
 ## Objetivo
 Organizar recepção, triagem, consultas e exames, permitindo que pacientes acompanhem sua própria fila por link/QR Code e por painel de TV na clínica.
 
