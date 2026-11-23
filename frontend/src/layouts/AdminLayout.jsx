@@ -1,6 +1,6 @@
 import {useEffect,useState} from "react";
 import {NavLink,Outlet,useLocation} from "react-router-dom";
-import {LayoutDashboard,ClipboardList,UsersRound,Stethoscope,Layers3,HeartPulse,DoorOpen,Monitor,ShieldCheck,ScrollText,Settings2,PanelLeftClose,PanelLeftOpen,Menu,X,ChevronRight,Building2} from "lucide-react";
+import {LayoutDashboard,ClipboardList,UsersRound,Stethoscope,Layers3,HeartPulse,DoorOpen,Monitor,ShieldCheck,ScrollText,Settings2,PanelLeftClose,PanelLeftOpen,Menu,X,ChevronRight,Building2} from "./AdminIcons.jsx";
 import {adminApi} from "../pages/admin/adminApi.js";
 import "../pages/admin/SettingsPage.css";
 import "./AdminLayout.css";
