@@ -2,20 +2,27 @@ import { getPool } from "../config/database.js";
 const uuid=v=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const deny=(req,res)=>req.staff?.role!=="doctor"?(res.status(403).json({error:"Acesso exclusivo do médico"}),true):false;
 const fail=(res,e)=>{console.error("Medical queue error",{code:e.code??"UNKNOWN"});return res.status(503).json({error:"Fila médica temporariamente indisponível"});};
-const scope=`SELECT p.staff_user_id,p.room_id,p.queue_definition_id,q.queue_mode,r.name AS room_name,q.name AS queue_name,s.display_name
- FROM public.doctor_profiles p JOIN public.staff_users s ON s.id=p.staff_user_id
- JOIN public.rooms r ON r.id=p.room_id JOIN public.queue_definitions q ON q.id=p.queue_definition_id
- WHERE p.staff_user_id=$1 AND p.enabled=true AND s.active=true AND r.active=true AND q.active=true`;
 async function resolveDoctor(client,req){
  const roomId=req.device?.room_id;
  if(!roomId)return null;
- const {rows}=await client.query(`SELECT p.staff_user_id,p.room_id,p.queue_definition_id,q.queue_mode,r.name AS room_name,q.name AS queue_name,s.display_name
- FROM public.doctor_profiles p JOIN public.staff_users s ON s.id=p.staff_user_id
- JOIN public.rooms r ON r.id=p.room_id JOIN public.queue_definitions q ON q.id=p.queue_definition_id
- WHERE p.room_id=$1 AND p.enabled=true AND s.active=true AND r.active=true AND q.active=true
- ORDER BY s.display_name LIMIT 2`,[roomId]);
- if(rows.length>1){const err=new Error("Há mais de um médico ativo neste consultório. Ajuste a escala antes de atender.");err.status=409;throw err;}
- return rows[0]??null;
+ const room=(await client.query("SELECT id,name FROM public.rooms WHERE id=$1 AND active=true",[roomId])).rows[0];
+ if(!room)return null;
+ const {rows}=await client.query(`SELECT DISTINCT q.id AS queue_definition_id,q.name AS queue_name,q.queue_mode,qi.professional_id,
+ COALESCE(s.display_name,'Atendimento médico') AS display_name
+ FROM public.queue_sessions qs
+ JOIN public.queue_definitions q ON q.id=qs.definition_id AND q.active=true AND q.stage_type IN ('consultation','exam')
+ JOIN public.queue_instances qi ON qi.session_id=qs.id AND qi.active=true
+ LEFT JOIN public.session_professionals sp ON sp.session_id=qs.id AND sp.room_id=$1
+ LEFT JOIN public.staff_users s ON s.id=sp.professional_id
+ WHERE qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now()
+ AND (sp.room_id IS NOT NULL OR (q.queue_mode='shared' AND qi.professional_id IS NULL))
+ AND (q.queue_mode='shared' OR qi.professional_id=sp.professional_id)
+ ORDER BY q.name LIMIT 3`,[roomId]);
+ if(rows.length>1){const err=new Error("Há mais de uma fila médica ativa. Configure a sessão da sala para identificar a fila correta.");err.status=409;throw err;}
+ const q=rows[0];
+ return {room_id:roomId,room_name:room.name,display_name:q?.display_name??"Atendimento médico",
+ queue_definition_id:q?.queue_definition_id??null,queue_name:q?.queue_name??null,queue_mode:q?.queue_mode??null,
+ staff_user_id:q?.professional_id??req.staff.id};
 }
 const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,
  p.full_name AS patient_name
@@ -31,8 +38,8 @@ const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_cat
 export async function medicalOverview(req,res){
  res.set("Cache-Control","no-store");if(deny(req,res))return;
  try{const pool=getPool();const doctor=await resolveDoctor(pool,req);
-  if(!doctor)return res.status(409).json({error:"O médico deste dispositivo precisa estar ativo, vinculado a uma fila de atendimento e a um consultório ativo. Confira os vínculos em Filas de atendimento e Dispositivos autorizados."});
-  const result=await pool.query(entries,[doctor.queue_definition_id,doctor.queue_mode,doctor.staff_user_id]);
+  if(!doctor)return res.status(409).json({error:"Este dispositivo precisa estar autorizado em uma sala ativa."});
+  const result=doctor.queue_definition_id?await pool.query(entries,[doctor.queue_definition_id,doctor.queue_mode,doctor.staff_user_id]):{rows:[]};
   return res.json({doctor,entries:result.rows});
  }catch(e){if(e.status===409)return res.status(409).json({error:e.message});return fail(res,e);}
 }
@@ -44,7 +51,8 @@ export async function medicalAction(req,res){
  try{
   await client.query("BEGIN");
   const doctor=await resolveDoctor(client,req);
-  if(!doctor){await client.query("ROLLBACK");return res.status(403).json({error:"Médico não vinculado"});}
+  if(!doctor){await client.query("ROLLBACK");return res.status(403).json({error:"Dispositivo sem sala autorizada"});}
+  if(!doctor.queue_definition_id){await client.query('ROLLBACK');return res.status(409).json({error:'Nenhuma fila médica ativa para este consultório.'});}
   const {rows}=await client.query(`SELECT e.*,qi.professional_id,qs.definition_id,qd.queue_mode FROM public.queue_entries e
    JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id
    JOIN public.queue_definitions qd ON qd.id=qs.definition_id
@@ -57,10 +65,10 @@ export async function medicalAction(req,res){
   if(e.status!==expected){await client.query("ROLLBACK");return res.status(409).json({error:"A senha mudou de situação. Atualize a fila."});}
   if(action==="call"){
    const busy=await client.query(`SELECT 1 FROM public.queue_entries x JOIN public.call_events ce ON ce.queue_entry_id=x.id
-    WHERE x.status IN ('called','in_service') AND ce.called_by=$1 AND x.id<>$2 LIMIT 1`,[doctor.staff_user_id,entryId]);
+    WHERE x.status IN ('called','in_service') AND ce.room_id=$1 AND x.id<>$2 LIMIT 1`,[doctor.room_id,entryId]);
    if(busy.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Finalize o paciente atual antes de chamar outro"});}
    await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[entryId]);
-   await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,doctor.staff_user_id,doctor.room_id]);
+   await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,req.staff.id,doctor.room_id]);
   }else if(action==="arrival"){
    await client.query("UPDATE public.queue_entries SET status='in_service',service_started_at=now() WHERE id=$1",[entryId]);
   }else if(action==="no-show"){
