@@ -8,6 +8,7 @@ import AttendancePage from "./AttendancePage.jsx";
 import QueuesPage from "./QueuesPage.jsx";
 import AuditPage from "./AuditPage.jsx";
 import CatalogPage from "./CatalogPage.jsx";
+import AnalyticsPage from "./AnalyticsPage.jsx";
 import "./AdminPage.css";
 import "./AdminSectionPage.css";
 
@@ -24,6 +25,7 @@ function Settings() {
 
 export default function AdminSectionPage() {
   const { section: currentSection } = useParams();
+  if(currentSection==="relatorios") return <AnalyticsPage mode="reports"/>;
   if(currentSection==="dispositivos") return <DevicesPage/>;
   if(currentSection==="profissionais") return <DoctorsPage/>;
   if(currentSection==="pacientes") return <PatientsPage/>;
