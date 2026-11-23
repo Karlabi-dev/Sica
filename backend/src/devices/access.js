@@ -43,7 +43,7 @@ export async function deviceAuth(req,res,next) {
  const token=tokenFrom(req);
  if(!validToken(token)) return res.status(401).json({error:"Dispositivo não autorizado"});
  try {
-  const {rows}=await getPool().query(`SELECT d.id,d.name,d.role,d.staff_user_id,r.name AS room_name
+  const {rows}=await getPool().query(`SELECT d.id,d.name,d.role,d.room_id,d.staff_user_id,r.name AS room_name
    FROM public.authorized_devices d LEFT JOIN public.rooms r ON r.id=d.room_id
    JOIN public.staff_users su ON su.id=d.staff_user_id\n   WHERE d.device_token_hash=$1 AND d.status='active' AND su.active=true AND su.role=d.role`,[hash(token)]);
   if(!rows.length) return res.status(403).json({error:"Dispositivo aguardando aprovação ou revogado"});
