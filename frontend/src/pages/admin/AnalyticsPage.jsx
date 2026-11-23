@@ -45,6 +45,6 @@ export default function AnalyticsPage({mode="dashboard"}){
  <div className="analytics-columns"><FilteredAnalyticsPanel kind="trend" globalFilters={{days:String(days),queue,specialty,stage:stageFilter,status:statusFilter}} availableQueues={availableQueues}/><FilteredAnalyticsPanel kind="statuses" globalFilters={{days:String(days),queue,specialty,stage:stageFilter,status:statusFilter}} availableQueues={availableQueues}/></div>
  <div className="analytics-columns"><section className="analytics-panel"><div className="analytics-panel-head"><div><h2>Leitura gerencial</h2><p>Observações calculadas a partir dos dados registrados</p></div></div><div className="analytics-insights">{insights.map((t,i)=><p key={i}><span>{i+1}</span>{t}</p>)}</div></section><FilteredAnalyticsPanel kind="stages" globalFilters={{days:String(days),queue,specialty,stage:stageFilter,status:statusFilter}} availableQueues={availableQueues}/></div>
  <FilteredAnalyticsPanel kind="queues" globalFilters={{days:String(days),queue,specialty,stage:stageFilter,status:statusFilter}} availableQueues={availableQueues}/>
- <p className="analytics-method">Fonte: Neon PostgreSQL · Atualizado em {new Date(data.generatedAt).toLocaleString("pt-BR")} · Os indicadores gerais e as exportações usam os filtros gerais; cada gráfico pode exibir um recorte independente. Os indicadores contabilizam etapas de atendimento, exceto jornadas distintas. Os tempos médios não são estimativas: usam horários registrados. Exportação PDF abre a impressão do navegador para salvar como PDF.</p></>}
+</>}
  </main>;
 }
