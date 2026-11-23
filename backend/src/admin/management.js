@@ -99,8 +99,12 @@ export async function adminAudit(req,res){
  if((from&&!/^\d{4}-\d{2}-\d{2}$/.test(from))||(to&&!/^\d{4}-\d{2}-\d{2}$/.test(to)))return res.status(400).json({error:"Datas inválidas"});
  try{
   const {rows}=await getPool().query(`SELECT a.id,a.created_at,a.action,a.resource_type,a.resource_id,a.request_id,a.metadata,
-   s.display_name AS actor_name,s.role AS actor_role FROM public.audit_events a
+   s.display_name AS actor_name,s.role AS actor_role, qe.ticket_code,qd.name AS queue_name FROM public.audit_events a
    LEFT JOIN public.staff_users s ON s.id=a.actor_user_id
+   LEFT JOIN public.queue_entries qe ON qe.id=a.resource_id AND a.resource_type='queue_entry'
+   LEFT JOIN public.queue_instances qi ON qi.id=qe.queue_id
+   LEFT JOIN public.queue_sessions qs ON qs.id=qi.session_id
+   LEFT JOIN public.queue_definitions qd ON qd.id=qs.definition_id
    WHERE ($1='' OR a.action ILIKE '%'||$1||'%') AND ($2='' OR a.created_at >= $2::date)
    AND ($3='' OR a.created_at < $3::date+interval '1 day') AND ($4='' OR s.display_name ILIKE '%'||$4||'%')
    ORDER BY a.created_at DESC,a.id DESC LIMIT 500`,[action,from,to,actor]);
