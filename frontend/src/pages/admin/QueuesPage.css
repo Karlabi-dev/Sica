@@ -3,3 +3,5 @@
 .queue-room-assignments{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.queue-room-assignments label{display:grid;gap:8px;font-size:13px;font-weight:700;color:#47677a}.queue-room-assignments select{width:100%;min-height:46px;padding:10px 12px;border:1px solid #d7e4eb;border-radius:9px;background:white;font-size:14px;color:#254457}@media(max-width:680px){.queue-room-assignments{grid-template-columns:1fr}}
 
 .queue-search-feedback{margin:-8px 0 0;color:#688698;font-size:12px;line-height:1.5}.queue-doctor-search input[type=search]{appearance:auto}
+
+.queue-inline-warning{flex-basis:100%;margin:6px 0 0;padding:11px 13px;border:1px solid #f0d1b8;border-radius:9px;background:#fff8ed;color:#925e2b;font-size:12px;line-height:1.5;max-width:360px}.queue-inline-warning strong{display:block;color:#8b4b19;margin-bottom:3px}
