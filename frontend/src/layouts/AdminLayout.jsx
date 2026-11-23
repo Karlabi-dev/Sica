@@ -12,7 +12,6 @@ export const ADMIN_MENU = [
   { to: "/admin/salas", label: "Salas", icon: "▣" },
   { to: "/admin/televisores", label: "Televisores", icon: "▧" },
   { to: "/admin/dispositivos", label: "Dispositivos autorizados", icon: "▣" },
-  { to: "/admin/relatorios", label: "Relatórios", icon: "▥" },
   { to: "/admin/auditoria", label: "Auditoria", icon: "◎" },
   { to: "/admin/configuracoes", label: "Configurações", icon: "⚙" },
 ];
