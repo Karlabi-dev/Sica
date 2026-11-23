@@ -61,3 +61,22 @@ export async function changeQueueStatus(req,res){
   await client.query("COMMIT");return res.json({id:req.params.id,active:req.body.active});
  }catch(e){await client.query("ROLLBACK").catch(()=>{});console.error("Queue status error",{code:e.code??"UNKNOWN"});return res.status(503).json({error:"Não foi possível atualizar a fila"});}finally{client.release();}
 }
+
+export async function deleteQueue(req,res){
+ res.set("Cache-Control","no-store");
+ if(req.staff?.role!=="admin")return res.status(403).json({error:"Somente administradores"});
+ if(!uuid(req.params.id))return res.status(400).json({error:"Fila inválida"});
+ const client=await getPool().connect();
+ try{
+  await client.query("BEGIN");
+  const q=await client.query("SELECT id,name,active FROM public.queue_definitions WHERE id=$1 FOR UPDATE",[req.params.id]);
+  if(!q.rowCount){await client.query("ROLLBACK");return res.status(404).json({error:"Fila não encontrada"});}
+  if(q.rows[0].active){await client.query("ROLLBACK");return res.status(409).json({error:"Desative a fila antes de excluí-la."});}
+  const history=await client.query("SELECT 1 FROM public.queue_sessions WHERE definition_id=$1 LIMIT 1",[req.params.id]);
+  if(history.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Esta fila possui histórico de atendimento e não pode ser apagada definitivamente. Mantenha-a inativa para preservar os registros dos pacientes."});}
+  await client.query("UPDATE public.doctor_profiles SET queue_definition_id=NULL,room_id=NULL,updated_at=now() WHERE queue_definition_id=$1",[req.params.id]);
+  await client.query("DELETE FROM public.queue_definitions WHERE id=$1",[req.params.id]);
+  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'queue.deleted','queue_definition',$2,$3::jsonb)",[req.staff.id,req.params.id,JSON.stringify({name:q.rows[0].name})]);
+  await client.query("COMMIT");return res.json({deleted:true});
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});console.error("Queue deletion failed",{code:e.code??"UNKNOWN"});return res.status(409).json({error:"Não foi possível excluir esta fila porque existem vínculos que precisam ser preservados."});}finally{client.release();}
+}
