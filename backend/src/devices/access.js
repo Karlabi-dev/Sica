@@ -81,12 +81,12 @@ export async function approveDevice(req,res) {
   const previousStaff=previousStaffId?await client.query("SELECT firebase_uid FROM public.staff_users WHERE id=$1",[previousStaffId]):{rows:[]};
   const synthetic=previousStaff.rows[0]?.firebase_uid?.startsWith("device:")??false;
   let assignedRoom=roomId??null;
-  if(role==="doctor"){
-   if(!roomId){await client.query("ROLLBACK");return res.status(400).json({error:"Selecione um consultório cadastrado."});}
+  if(["doctor","attendant"].includes(role)){
+   if(!roomId){await client.query("ROLLBACK");return res.status(400).json({error:"Selecione uma sala ou guichê cadastrado."});}
    const room=await client.query("SELECT id FROM public.rooms WHERE id=$1 AND active=true FOR SHARE",[roomId]);
    if(!room.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"O consultório está inativo ou não existe."});}
-   const occupied=await client.query("SELECT id FROM public.authorized_devices WHERE room_id=$1 AND id<>$2 AND status='active' AND role='doctor' LIMIT 1",[roomId,device.id]);
-   if(occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Este consultório já possui outro dispositivo autorizado."});}
+   const occupied=await client.query("SELECT id FROM public.authorized_devices WHERE room_id=$1 AND id<>$2 AND status='active' LIMIT 1",[roomId,device.id]);
+   if(occupied.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Este local já possui outro dispositivo autorizado."});}
    assignedRoom=roomId;
   }else{assignedRoom=null;}
   // Identidade técnica independente do profissional que usa o consultório.
