@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect,useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import "./AdminLayout.css";
+import {adminApi} from "../pages/admin/adminApi.js";
+import "../pages/admin/SettingsPage.css";
 
 export const ADMIN_MENU = [
   { to: "/admin", label: "Dashboard", icon: "◫", end: true },
@@ -18,6 +20,7 @@ export const ADMIN_MENU = [
 
 export default function AdminLayout() {
   const location = useLocation();
+  useEffect(()=>{let active=true;adminApi("/admin/settings").then(d=>{if(!active)return;const p=d.preferences??{};const root=document.documentElement;root.dataset.sicaTheme=p.theme??"light";root.dataset.sicaContrast=p.highContrast?"high":"normal";root.dataset.sicaMotion=p.reducedMotion?"reduced":"normal";root.style.fontSize=(p.fontScale??100)+"%";}).catch(()=>{});return()=>{active=false;};},[]);
   const [menuOpen, setMenuOpen] = useState(false);
   const current = ADMIN_MENU.find(item => item.to === location.pathname);
   return <div className="sica-admin">
