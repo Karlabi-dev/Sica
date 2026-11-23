@@ -6,6 +6,17 @@ const scope=`SELECT p.staff_user_id,p.room_id,p.queue_definition_id,q.queue_mode
  FROM public.doctor_profiles p JOIN public.staff_users s ON s.id=p.staff_user_id
  JOIN public.rooms r ON r.id=p.room_id JOIN public.queue_definitions q ON q.id=p.queue_definition_id
  WHERE p.staff_user_id=$1 AND p.enabled=true AND s.active=true AND r.active=true AND q.active=true`;
+async function resolveDoctor(client,req){
+ const roomId=req.device?.room_id;
+ if(!roomId)return null;
+ const {rows}=await client.query(`SELECT p.staff_user_id,p.room_id,p.queue_definition_id,q.queue_mode,r.name AS room_name,q.name AS queue_name,s.display_name
+ FROM public.doctor_profiles p JOIN public.staff_users s ON s.id=p.staff_user_id
+ JOIN public.rooms r ON r.id=p.room_id JOIN public.queue_definitions q ON q.id=p.queue_definition_id
+ WHERE p.room_id=$1 AND p.enabled=true AND s.active=true AND r.active=true AND q.active=true
+ ORDER BY s.display_name LIMIT 2`,[roomId]);
+ if(rows.length>1){const err=new Error("Há mais de um médico ativo neste consultório. Ajuste a escala antes de atender.");err.status=409;throw err;}
+ return rows[0]??null;
+}
 const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,
  p.full_name AS patient_name
  FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id
@@ -19,11 +30,11 @@ const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_cat
  e.legal_priority DESC,e.enqueued_at,e.id LIMIT 200`;
 export async function medicalOverview(req,res){
  res.set("Cache-Control","no-store");if(deny(req,res))return;
- try{const pool=getPool();const doctor=(await pool.query(scope,[req.staff.id])).rows[0];
+ try{const pool=getPool();const doctor=await resolveDoctor(pool,req);
   if(!doctor)return res.status(409).json({error:"O médico deste dispositivo precisa estar ativo, vinculado a uma fila de atendimento e a um consultório ativo. Confira os vínculos em Filas de atendimento e Dispositivos autorizados."});
-  const result=await pool.query(entries,[doctor.queue_definition_id,doctor.queue_mode,req.staff.id]);
+  const result=await pool.query(entries,[doctor.queue_definition_id,doctor.queue_mode,doctor.staff_user_id]);
   return res.json({doctor,entries:result.rows});
- }catch(e){return fail(res,e);}
+ }catch(e){if(e.status===409)return res.status(409).json({error:e.message});return fail(res,e);}
 }
 export async function medicalAction(req,res){
  res.set("Cache-Control","no-store");if(deny(req,res))return;
@@ -32,24 +43,24 @@ export async function medicalAction(req,res){
  const client=await getPool().connect();
  try{
   await client.query("BEGIN");
-  const doctor=(await client.query(scope,[req.staff.id])).rows[0];
+  const doctor=await resolveDoctor(client,req);
   if(!doctor){await client.query("ROLLBACK");return res.status(403).json({error:"Médico não vinculado"});}
   const {rows}=await client.query(`SELECT e.*,qi.professional_id,qs.definition_id,qd.queue_mode FROM public.queue_entries e
    JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id
    JOIN public.queue_definitions qd ON qd.id=qs.definition_id
    WHERE e.id=$1 AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now() FOR UPDATE OF e`,[entryId]);
   const e=rows[0];
-  if(!e||e.definition_id!==doctor.queue_definition_id||(doctor.queue_mode==="individual"&&e.professional_id!==req.staff.id)||(doctor.queue_mode==="shared"&&e.professional_id!==null)){
+  if(!e||e.definition_id!==doctor.queue_definition_id||(doctor.queue_mode==="individual"&&e.professional_id!==doctor.staff_user_id)||(doctor.queue_mode==="shared"&&e.professional_id!==null)){
    await client.query("ROLLBACK");return res.status(404).json({error:"Senha não pertence à fila deste médico"});
   }
   const expected=action==="call"?"waiting":action==="arrival"||action==="no-show"?"called":"in_service";
   if(e.status!==expected){await client.query("ROLLBACK");return res.status(409).json({error:"A senha mudou de situação. Atualize a fila."});}
   if(action==="call"){
    const busy=await client.query(`SELECT 1 FROM public.queue_entries x JOIN public.call_events ce ON ce.queue_entry_id=x.id
-    WHERE x.status IN ('called','in_service') AND ce.called_by=$1 AND x.id<>$2 LIMIT 1`,[req.staff.id,entryId]);
+    WHERE x.status IN ('called','in_service') AND ce.called_by=$1 AND x.id<>$2 LIMIT 1`,[doctor.staff_user_id,entryId]);
    if(busy.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Finalize o paciente atual antes de chamar outro"});}
    await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[entryId]);
-   await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,req.staff.id,doctor.room_id]);
+   await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,doctor.staff_user_id,doctor.room_id]);
   }else if(action==="arrival"){
    await client.query("UPDATE public.queue_entries SET status='in_service',service_started_at=now() WHERE id=$1",[entryId]);
   }else if(action==="no-show"){
@@ -76,5 +87,5 @@ export async function medicalAction(req,res){
   await client.query(`INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata)
    VALUES($1,$2,'queue_entry',$3,$4::jsonb)`,[req.staff.id,"medical."+action,entryId,JSON.stringify({statusFrom:e.status})]);
   await client.query("COMMIT");return res.json({status:action==="return"?"transferred":action});
- }catch(error){await client.query("ROLLBACK").catch(()=>{});return fail(res,error);}finally{client.release();}
+ }catch(error){await client.query("ROLLBACK").catch(()=>{});if(error.status===409)return res.status(409).json({error:error.message});return fail(res,error);}finally{client.release();}
 }
