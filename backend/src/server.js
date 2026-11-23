@@ -11,7 +11,7 @@ import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailCh
 import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, receptionTrackingLink } from "./reception/operations.js";
 
 import { adminAttendance, adminAttendanceTracking } from "./admin/attendance.js";
-import { adminPatients, adminPatientJourney, adminAudit, adminCatalog, adminCatalogWrite, adminCatalogDelete, adminSeedSpecialties, adminQueuesWrite } from "./admin/management.js";
+import { adminPatients, adminPatientJourney, adminReturnToQueue, adminAudit, adminCatalog, adminCatalogWrite, adminCatalogDelete, adminSeedSpecialties, adminQueuesWrite } from "./admin/management.js";
 import { updateQueueDoctors, changeQueueStatus, deleteQueue } from "./admin/queueDoctors.js";
 import { medicalOverview, medicalAction } from "./medical/operations.js";
 import { doctorCatalog, createDoctor, updateDoctor, deleteDoctor } from "./admin/doctors.js";
@@ -65,6 +65,7 @@ app.get("/admin/attendance",staffAuth,adminAttendance);
 app.post("/admin/attendance/:entryId/tracking-link",staffAuth,adminAttendanceTracking);
 app.get("/admin/patients",staffAuth,adminPatients);
 app.get("/admin/patients/:id",staffAuth,adminPatientJourney);
+app.post("/admin/patients/entries/:entryId/return-to-queue",staffAuth,adminReturnToQueue);
 app.get("/admin/audit",staffAuth,adminAudit);
 app.get("/admin/catalog",staffAuth,adminCatalog);
 app.post("/admin/catalog/specialties/seed",staffAuth,adminSeedSpecialties);
