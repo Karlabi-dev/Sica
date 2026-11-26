@@ -20,8 +20,8 @@ export async function receptionOverview(req,res) {
         LEFT JOIN public.queue_instances qi ON qi.session_id=qs.id AND qi.active=true
         LEFT JOIN public.queue_entries e ON e.queue_id=qi.id
         WHERE qd.active=true GROUP BY qd.id,qd.name,qd.stage_type ORDER BY qd.stage_type,qd.name`),
-      pool.query(`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,e.journey_id,(SELECT count(*)::int FROM public.call_events cc WHERE cc.queue_entry_id=e.id AND cc.called_at>=e.enqueued_at) AS call_count,
-        qd.name AS queue_name,qd.stage_type,p.full_name AS patient_name,p.phone AS patient_phone,
+      pool.query(`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,e.service_finished_at,e.journey_id,(SELECT count(*)::int FROM public.call_events cc WHERE cc.queue_entry_id=e.id AND cc.called_at>=e.enqueued_at) AS call_count,
+        (ce.called_by=$2) AS own_call,qd.name AS queue_name,qd.stage_type,p.full_name AS patient_name,p.phone AS patient_phone,
         COALESCE(rm.name,desk.name) AS destination_name, j.started_at AS issued_at, tr.reason AS return_observation
         FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id
         JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions qd ON qd.id=qs.definition_id
@@ -31,7 +31,7 @@ export async function receptionOverview(req,res) {
         LEFT JOIN public.authorized_devices desk ON desk.staff_user_id=ce.called_by AND desk.role='attendant' AND desk.status='active'
         LEFT JOIN LATERAL (SELECT reason FROM public.queue_transfers WHERE to_entry_id=e.id ORDER BY created_at DESC LIMIT 1) tr ON true
         WHERE (j.started_at AT TIME ZONE 'America/Fortaleza')::date=COALESCE($1::date,(now() AT TIME ZONE 'America/Fortaleza')::date)
-        ORDER BY CASE WHEN e.status='waiting' THEN 0 ELSE 1 END,e.legal_priority DESC,e.enqueued_at ASC LIMIT 300`,[date])
+        ORDER BY CASE WHEN e.status='waiting' THEN 0 ELSE 1 END,e.legal_priority DESC,e.enqueued_at ASC LIMIT 300`,[date,req.staff.id])
     ]);
     return res.json({queues:queues.rows,entries:entries.rows});
   } catch(error) { return fail(res,error); }
@@ -157,9 +157,9 @@ export async function receptionReturn(req,res){
  const client=await getPool().connect();try{await client.query("BEGIN");
  const result=await client.query(`UPDATE public.queue_entries e SET status='waiting',called_at=NULL,service_started_at=NULL,service_finished_at=NULL,enqueued_at=now()
  FROM public.queue_instances qi JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions q ON q.id=qs.definition_id
- WHERE e.id=$1 AND e.queue_id=qi.id AND q.stage_type='reception' AND qs.status='active' AND e.status IN ('called','in_service')
+ WHERE e.id=$1 AND e.queue_id=qi.id AND q.stage_type='reception' AND qs.status='active' AND qs.ends_at>now() AND qi.active AND e.status IN ('completed','no_show') AND e.service_finished_at > now()-interval '1 hour' AND NOT EXISTS(SELECT 1 FROM public.queue_entries other WHERE other.journey_id=e.journey_id AND other.id<>e.id AND other.status IN ('waiting','called','in_service'))
  AND EXISTS(SELECT 1 FROM public.call_events ce WHERE ce.id=(SELECT id FROM public.call_events WHERE queue_entry_id=e.id ORDER BY called_at DESC,id DESC LIMIT 1) AND ce.called_by=$2) RETURNING e.id`,[id,req.staff.id]);
- if(!result.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Senha não está em atendimento neste guichê."});}
+ if(!result.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Devolução indisponível: prazo de uma hora expirado ou atendimento não elegível."});}
  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,'reception.return','queue_entry',$2)",[req.staff.id,id]);await client.query("COMMIT");return res.json({status:"waiting"});
  }catch(e){await client.query("ROLLBACK").catch(()=>{});return fail(res,e);}finally{client.release();}
 }
@@ -178,4 +178,20 @@ export async function receptionRecall(req,res){
  else{await client.query("UPDATE public.queue_entries SET called_at=now() WHERE id=$1",[id]);await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[id,req.staff.id,req.device?.room_id??null]);}
  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,$2,'queue_entry',$3)",[req.staff.id,absence?"reception.no-show":"reception.recall",id]);await client.query("COMMIT");return res.json({status:absence?"no_show":"called",entryId:id});
  }catch(e){await client.query("ROLLBACK").catch(()=>{});return fail(res,e);}finally{client.release();}
+}
+
+export async function receptionClose(req,res){
+ if(!allowed(req,res))return;
+ const id=req.params.entryId;if(!validId(id))return res.status(400).json({error:"Senha inválida"});
+ try{
+ const result=await getPool().query(`WITH updated AS (
+ UPDATE public.queue_entries e SET status='completed',service_finished_at=now()
+ FROM public.queue_instances qi JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions q ON q.id=qs.definition_id
+ WHERE e.id=$1 AND e.queue_id=qi.id AND q.stage_type='reception' AND e.status IN ('called','in_service')
+ AND (SELECT called_by FROM public.call_events WHERE queue_entry_id=e.id ORDER BY called_at DESC,id DESC LIMIT 1)=$2
+ RETURNING e.id)
+ INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) SELECT $2,'reception.complete','queue_entry',id FROM updated RETURNING resource_id`,[id,req.staff.id]);
+ if(!result.rowCount)return res.status(409).json({error:"Atendimento não está ativo neste guichê."});
+ return res.json({status:"completed",entryId:id});
+ }catch(e){return fail(res,e);}
 }
