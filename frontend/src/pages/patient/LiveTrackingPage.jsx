@@ -18,16 +18,21 @@ export default function LiveTrackingPage() {
   const [preferences,setPreferences]=useState(()=>{try{const p=JSON.parse(localStorage.getItem("sica_tracking_alerts"));return {sound:p?.sound!==false,vibration:p?.vibration!==false};}catch{return {sound:true,vibration:true};}});
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [draft,setDraft]=useState(preferences);
-  const audio=useRef(null),lastCall=useRef(null),settingsButton=useRef(null);
-  async function unlockAudio(){try{const Audio=window.AudioContext||window.webkitAudioContext;if(Audio){audio.current??=new Audio();await audio.current.resume();}}catch{}}
+  const audio=useRef(null),lastSound=useRef(null),lastVibration=useRef(null),settingsButton=useRef(null);
+  const [testResult,setTestResult]=useState("");
+  function beep(ctx){if(ctx?.state!=="running")return false;[0,.4,.8].forEach(offset=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=880;gain.gain.value=.35;osc.connect(gain);gain.connect(ctx.destination);osc.start(ctx.currentTime+offset);osc.stop(ctx.currentTime+offset+.28);});return true;}
+  async function unlockAudio(){try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return false;audio.current??=new Audio();if(audio.current.state!=="running")await audio.current.resume();return audio.current.state==="running";}catch{return false;}}
+  function vibrate(){try{return navigator.vibrate?.([400,180,400,180,600])===true;}catch{return false;}}
+  function notify(p){if(ticket?.status!=="called")return;const key=ticket.latest_called_at??ticket.called_at;if(!key)return;
+    if(p.vibration&&lastVibration.current!==key&&vibrate())lastVibration.current=key;
+    if(p.sound&&lastSound.current!==key&&beep(audio.current))lastSound.current=key;
+  }
+  async function testNotifications(){const vibrationOk=draft.vibration?vibrate():null;const soundOk=draft.sound?(await unlockAudio()&&beep(audio.current)):null;setTestResult([draft.sound?(soundOk?"Som enviado.":"Som bloqueado ou indisponível."):"Som desativado.",draft.vibration?(vibrationOk?"Vibração solicitada.":"Vibração bloqueada ou incompatível."):"Vibração desativada."].join(" "));}
   function closeSettings(){setSettingsOpen(false);settingsButton.current?.focus();}
-  function saveSettings(){if(draft.sound)unlockAudio();setPreferences(draft);try{localStorage.setItem("sica_tracking_alerts",JSON.stringify(draft));}catch{}closeSettings();}
-  useEffect(()=>{const unlock=()=>{if(preferences.sound)unlockAudio();};document.addEventListener("pointerdown",unlock);document.addEventListener("keydown",unlock);return()=>{document.removeEventListener("pointerdown",unlock);document.removeEventListener("keydown",unlock);};},[preferences.sound]);
+  function saveSettings(){if(draft.sound)unlockAudio().then(()=>notify(draft));else notify(draft);setPreferences(draft);try{localStorage.setItem("sica_tracking_alerts",JSON.stringify(draft));}catch{}closeSettings();}
+  useEffect(()=>{const unlock=()=>{notify(preferences);if(preferences.sound)unlockAudio().then(()=>notify(preferences));};document.addEventListener("click",unlock);document.addEventListener("keydown",unlock);return()=>{document.removeEventListener("click",unlock);document.removeEventListener("keydown",unlock);};},[preferences,ticket]);
   useEffect(()=>{if(!settingsOpen)return;const escape=e=>{if(e.key==="Escape")closeSettings();};document.addEventListener("keydown",escape);return()=>document.removeEventListener("keydown",escape);},[settingsOpen]);
-  useEffect(()=>{if(ticket?.status!=="called")return;const key=ticket.latest_called_at??ticket.called_at;if(!key||lastCall.current===key)return;lastCall.current=key;
-    if(preferences.vibration)try{navigator.vibrate?.([300,150,300,150,500]);}catch{}
-    if(preferences.sound)try{const ctx=audio.current;if(ctx?.state==="running"){[0,.35,.7].forEach(offset=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=880;gain.gain.value=.12;osc.connect(gain);gain.connect(ctx.destination);osc.start(ctx.currentTime+offset);osc.stop(ctx.currentTime+offset+.22);});}}catch{}
-  },[preferences,ticket]);
+  useEffect(()=>{notify(preferences);},[preferences,ticket]);
   useEffect(() => {
     const interval = setInterval(() => setClock(Date.now()), 250);
     return () => clearInterval(interval);
@@ -76,7 +81,7 @@ export default function LiveTrackingPage() {
         <div className="tracking-font-controls" role="group" aria-label="Tamanho do texto">
           <button type="button" onClick={() => setFontLevel(v => Math.max(0, v - 1))} disabled={fontLevel === 0} aria-label="Diminuir texto">A−</button>
           <button type="button" onClick={() => setFontLevel(v => Math.min(2, v + 1))} disabled={fontLevel === 2} aria-label="Aumentar texto">A+</button>
-          <button ref={settingsButton} type="button" className="tracking-settings-trigger" aria-label="Configurações de notificações" aria-haspopup="dialog" aria-expanded={settingsOpen} onClick={()=>{setDraft({...preferences});setSettingsOpen(true);}}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.86 1.86-.06-.06A1.7 1.7 0 0 0 16 18.4a1.7 1.7 0 0 0-1 1.55V20h-2.6v-.05a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-1.86-1.86.06-.06A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.55-1H6.4v-2.6h.05A1.7 1.7 0 0 0 8 10.4a1.7 1.7 0 0 0-.34-1.88l-.06-.06L9.46 6.6l.06.06A1.7 1.7 0 0 0 11.4 7a1.7 1.7 0 0 0 1-1.55V5.4H15v.05A1.7 1.7 0 0 0 16 7a1.7 1.7 0 0 0 1.88-.34l.06-.06 1.86 1.86-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.55 1H21V14h-.05a1.7 1.7 0 0 0-1.55 1Z" transform="translate(-1.7 -.7)"/></svg></button>
+          <button ref={settingsButton} type="button" className="tracking-settings-trigger" aria-label="Configurações de notificações" aria-haspopup="dialog" aria-expanded={settingsOpen} onClick={()=>{setDraft({...preferences});setTestResult("");setSettingsOpen(true);}}><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.86 1.86-.06-.06A1.7 1.7 0 0 0 16 18.4a1.7 1.7 0 0 0-1 1.55V20h-2.6v-.05a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-1.86-1.86.06-.06A1.7 1.7 0 0 0 8 15a1.7 1.7 0 0 0-1.55-1H6.4v-2.6h.05A1.7 1.7 0 0 0 8 10.4a1.7 1.7 0 0 0-.34-1.88l-.06-.06L9.46 6.6l.06.06A1.7 1.7 0 0 0 11.4 7a1.7 1.7 0 0 0 1-1.55V5.4H15v.05A1.7 1.7 0 0 0 16 7a1.7 1.7 0 0 0 1.88-.34l.06-.06 1.86 1.86-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.55 1H21V14h-.05a1.7 1.7 0 0 0-1.55 1Z" transform="translate(-1.7 -.7)"/></svg></button>
         </div>
       </header>
       {settingsOpen&&<div className="tracking-settings-backdrop" onClick={closeSettings}><section className="tracking-settings-modal" role="dialog" aria-modal="true" aria-labelledby="tracking-settings-title" onClick={e=>e.stopPropagation()}>
@@ -84,6 +89,7 @@ export default function LiveTrackingPage() {
         <p>Escolha como deseja receber os alertas de chamada.</p>
         {[["sound","Som","Alerta sonoro quando sua senha for chamada."],["vibration","Vibração","Vibrar o celular durante a chamada."]].map(([key,title,description])=><label className="tracking-settings-option" key={key}><div><strong>{title}</strong><small>{description}</small></div><input type="checkbox" role="switch" checked={draft[key]} onChange={e=>setDraft(old=>({...old,[key]:e.target.checked}))}/><span className="tracking-switch" aria-hidden="true"/></label>)}
         <small className="tracking-settings-hint">Os alertas dependem das permissões e da compatibilidade do seu dispositivo.</small>
+        <button type="button" className="tracking-settings-save" style={{background:"#eaf6f3",color:"#0c4f8b",marginBottom:10}} onClick={testNotifications}>Testar notificações</button>{testResult&&<p role="status">{testResult}</p>}
         <button type="button" className="tracking-settings-save" onClick={saveSettings}>Salvar alterações</button>
       </section></div>}
       <main className="tracking-main">
