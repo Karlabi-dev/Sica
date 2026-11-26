@@ -25,11 +25,13 @@ async function resolveDoctor(client,req){
  staff_user_id:q?.professional_id??req.staff.id};
 }
 const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,
- p.full_name AS patient_name
+ CASE WHEN e.status='waiting' OR ce.room_id=$4 THEN p.full_name END AS patient_name, ce.room_id AS called_room_id, rm.name AS called_room_name
  FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id
  JOIN public.queue_sessions qs ON qs.id=qi.session_id
  JOIN public.patient_journeys j ON j.id=e.journey_id
  LEFT JOIN public.patients p ON p.id=j.patient_id
+ LEFT JOIN LATERAL (SELECT room_id FROM public.call_events WHERE queue_entry_id=e.id ORDER BY called_at DESC,id DESC LIMIT 1) ce ON true
+ LEFT JOIN public.rooms rm ON rm.id=ce.room_id
  WHERE qs.definition_id=$1 AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now()
  AND qi.active=true AND ($2='shared' AND qi.professional_id IS NULL OR $2='individual' AND qi.professional_id=$3)
  AND e.status IN ('waiting','called','in_service')
@@ -39,20 +41,21 @@ export async function medicalOverview(req,res){
  res.set("Cache-Control","no-store");if(deny(req,res))return;
  try{const pool=getPool();const doctor=await resolveDoctor(pool,req);
   if(!doctor)return res.status(409).json({error:"Este dispositivo precisa estar autorizado em uma sala ativa."});
-  const result=doctor.queue_definition_id?await pool.query(entries,[doctor.queue_definition_id,doctor.queue_mode,doctor.staff_user_id]):{rows:[]};
+  const result=doctor.queue_definition_id?await pool.query(entries,[doctor.queue_definition_id,doctor.queue_mode,doctor.staff_user_id,doctor.room_id]):{rows:[]};
   return res.json({doctor,entries:result.rows});
  }catch(e){if(e.status===409)return res.status(409).json({error:e.message});return fail(res,e);}
 }
 export async function medicalAction(req,res){
  res.set("Cache-Control","no-store");if(deny(req,res))return;
  const {entryId,action}=req.params;
- if(!uuid(entryId)||!["call","arrival","complete","return","no-show"].includes(action))return res.status(400).json({error:"Ação inválida"});
+ if(!uuid(entryId)||!["call","recall","arrival","complete","return","no-show"].includes(action))return res.status(400).json({error:"Ação inválida"});
  const client=await getPool().connect();
  try{
   await client.query("BEGIN");
   const doctor=await resolveDoctor(client,req);
   if(!doctor){await client.query("ROLLBACK");return res.status(403).json({error:"Dispositivo sem sala autorizada"});}
   if(!doctor.queue_definition_id){await client.query('ROLLBACK');return res.status(409).json({error:'Nenhuma fila médica ativa para este consultório.'});}
+  await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',['medical:'+doctor.queue_definition_id]);
   const {rows}=await client.query(`SELECT e.*,qi.professional_id,qs.definition_id,qd.queue_mode FROM public.queue_entries e
    JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id
    JOIN public.queue_definitions qd ON qd.id=qs.definition_id
@@ -61,13 +64,23 @@ export async function medicalAction(req,res){
   if(!e||e.definition_id!==doctor.queue_definition_id||(doctor.queue_mode==="individual"&&e.professional_id!==doctor.staff_user_id)||(doctor.queue_mode==="shared"&&e.professional_id!==null)){
    await client.query("ROLLBACK");return res.status(404).json({error:"Senha não pertence à fila deste médico"});
   }
-  const expected=action==="call"?"waiting":action==="arrival"||action==="no-show"?"called":"in_service";
+  const expected=action==="call"?"waiting":action==="arrival"||action==="no-show"||action==="recall"?"called":"in_service";
   if(e.status!==expected){await client.query("ROLLBACK");return res.status(409).json({error:"A senha mudou de situação. Atualize a fila."});}
+  if(action!=="call"){
+   const owner=(await client.query("SELECT room_id FROM public.call_events WHERE queue_entry_id=$1 ORDER BY called_at DESC,id DESC LIMIT 1",[entryId])).rows[0];
+   if(owner?.room_id!==doctor.room_id){await client.query("ROLLBACK");return res.status(403).json({error:"Esta senha pertence a outro consultório."});}
+  }
   if(action==="call"){
+   const last=(await client.query(`SELECT x.legal_priority FROM public.call_events ce JOIN public.queue_entries x ON x.id=ce.queue_entry_id WHERE x.queue_id=$1 GROUP BY x.id,x.legal_priority ORDER BY min(ce.called_at) DESC LIMIT 1`,[e.queue_id])).rows[0];
+   const preferred=last?!last.legal_priority:true;
+   if(e.legal_priority!==preferred&&(await client.query("SELECT 1 FROM public.queue_entries WHERE queue_id=$1 AND status='waiting' AND legal_priority=$2 LIMIT 1",[e.queue_id,preferred])).rowCount){await client.query('ROLLBACK');return res.status(409).json({error:preferred?'Chame uma senha prioritária nesta vez.':'Chame uma senha comum nesta vez.'});}
    const busy=await client.query(`SELECT 1 FROM public.queue_entries x JOIN public.call_events ce ON ce.queue_entry_id=x.id
     WHERE x.status IN ('called','in_service') AND ce.room_id=$1 AND x.id<>$2 LIMIT 1`,[doctor.room_id,entryId]);
    if(busy.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Finalize o paciente atual antes de chamar outro"});}
    await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[entryId]);
+   await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,req.staff.id,doctor.room_id]);
+  }else if(action==="recall"){
+   await client.query("UPDATE public.queue_entries SET called_at=now() WHERE id=$1",[entryId]);
    await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,req.staff.id,doctor.room_id]);
   }else if(action==="arrival"){
    await client.query("UPDATE public.queue_entries SET status='in_service',service_started_at=now() WHERE id=$1",[entryId]);
@@ -90,7 +103,7 @@ export async function medicalAction(req,res){
    const next=await client.query(`INSERT INTO public.queue_entries(journey_id,queue_id,ticket_code,payment_category,legal_priority)
     VALUES($1,$2,$3,$4,$5) RETURNING id`,[e.journey_id,reception.rows[0].id,e.ticket_code,e.payment_category,e.legal_priority]);
    await client.query(`INSERT INTO public.queue_transfers(journey_id,from_entry_id,to_entry_id,transferred_by,reason)
-    VALUES($1,$2,$3,$4,$5)`,[e.journey_id,entryId,next.rows[0].id,req.staff.id,"Retorno à recepção"]);
+    VALUES($1,$2,$3,$4,$5)`,[e.journey_id,entryId,next.rows[0].id,req.staff.id,(typeof req.body?.observation==="string"&&req.body.observation.trim()?req.body.observation.trim().slice(0,120):"Retorno à recepção")]);
   }
   await client.query(`INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata)
    VALUES($1,$2,'queue_entry',$3,$4::jsonb)`,[req.staff.id,"medical."+action,entryId,JSON.stringify({statusFrom:e.status})]);
