@@ -55,11 +55,11 @@ export async function receptionCall(req,res) {
       await client.query("ROLLBACK");return res.status(409).json({error:"Senha não está aguardando na recepção"});
     }
     const active=await client.query(`SELECT 1 FROM public.queue_entries e JOIN public.call_events c ON c.queue_entry_id=e.id
-      WHERE e.status='called' AND c.called_by=$1 AND e.id<>$2 LIMIT 1`,[req.staff.id,target]);
+      WHERE e.status IN ('called','in_service') AND c.called_by=$1 AND e.id<>$2 LIMIT 1`,[req.staff.id,target]);
     if (active.rows.length) {await client.query("ROLLBACK");return res.status(409).json({error:"Conclua a chamada atual antes de chamar outra senha"});}
     await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[target]);
     await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id,called_at) VALUES($1,$2,$3,now())",[target,req.staff.id,req.device?.room_id??null]);
-    await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,'reception.call','queue_entry',$2)",[req.staff.id,entryId]);
+    await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,'reception.call','queue_entry',$2)",[req.staff.id,target]);
     await client.query("COMMIT");
     return res.json({status:"called",entryId:target});
   } catch(error) {await client.query("ROLLBACK").catch(()=>{});return fail(res,error);} finally {client.release();}
