@@ -8,7 +8,7 @@ import { rateLimit } from "./security/rateLimit.js";
 import { revokeAdminSession } from "./auth/adminEmailSession.js";
 import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js";
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
-import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, receptionTrackingLink, receptionReturn } from "./reception/operations.js";
+import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, receptionTrackingLink, receptionReturn, receptionRecall } from "./reception/operations.js";
 
 import {readClinicSettings,updateClinicSettings} from "./admin/settings.js";
 import { adminAnalytics } from "./admin/analytics.js";
@@ -97,6 +97,7 @@ app.post("/staff/reception/entries/:entryId/arrival", operationalAuth, reception
 app.post("/staff/reception/entries/:entryId/return", operationalAuth, receptionReturn);
 app.post("/staff/reception/entries/:entryId/handoff", operationalAuth, receptionHandoff);
 app.post("/staff/reception/entries/:entryId/tracking-link", operationalAuth, receptionTrackingLink);
+app.post("/staff/reception/entries/:entryId/:action", operationalAuth, (req,res)=>["recall","no-show"].includes(req.params.action)?receptionRecall(req,res):res.sendStatus(404));
 
 app.post("/auth/admin/email-code/request", rateLimit({windowMs:900000,max:6}), requestAdminEmailCode);
 app.post("/auth/admin/email-code/verify", rateLimit({windowMs:900000,max:15}), verifyAdminEmailCode);
