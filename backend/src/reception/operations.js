@@ -20,7 +20,7 @@ export async function receptionOverview(req,res) {
         LEFT JOIN public.queue_instances qi ON qi.session_id=qs.id AND qi.active=true
         LEFT JOIN public.queue_entries e ON e.queue_id=qi.id
         WHERE qd.active=true GROUP BY qd.id,qd.name,qd.stage_type ORDER BY qd.stage_type,qd.name`),
-      pool.query(`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,e.journey_id,
+      pool.query(`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,e.journey_id,(SELECT count(*)::int FROM public.call_events cc WHERE cc.queue_entry_id=e.id AND cc.called_at>=e.enqueued_at) AS call_count,
         qd.name AS queue_name,qd.stage_type,p.full_name AS patient_name,p.phone AS patient_phone,
         COALESCE(rm.name,desk.name) AS destination_name, j.started_at AS issued_at, tr.reason AS return_observation
         FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id
@@ -161,5 +161,21 @@ export async function receptionReturn(req,res){
  AND EXISTS(SELECT 1 FROM public.call_events ce WHERE ce.id=(SELECT id FROM public.call_events WHERE queue_entry_id=e.id ORDER BY called_at DESC,id DESC LIMIT 1) AND ce.called_by=$2) RETURNING e.id`,[id,req.staff.id]);
  if(!result.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Senha não está em atendimento neste guichê."});}
  await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,'reception.return','queue_entry',$2)",[req.staff.id,id]);await client.query("COMMIT");return res.json({status:"waiting"});
+ }catch(e){await client.query("ROLLBACK").catch(()=>{});return fail(res,e);}finally{client.release();}
+}
+
+export async function receptionRecall(req,res){
+ if(!allowed(req,res))return;
+ const id=req.params.entryId,absence=req.params.action==="no-show";
+ if(!validId(id))return res.status(400).json({error:"Senha inválida"});
+ const client=await getPool().connect();
+ try{await client.query("BEGIN");
+ const e=(await client.query(`SELECT e.*, (SELECT count(*)::int FROM public.call_events c WHERE c.queue_entry_id=e.id AND c.called_at>=e.enqueued_at) AS call_count,
+ (SELECT called_by FROM public.call_events c WHERE c.queue_entry_id=e.id ORDER BY called_at DESC,id DESC LIMIT 1) AS owner
+ FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions q ON q.id=qs.definition_id WHERE e.id=$1 AND q.stage_type='reception' FOR UPDATE OF e`,[id])).rows[0];
+ if(!e||e.status!=="called"||e.owner!==req.staff.id||Date.now()-new Date(e.called_at).getTime()<(e.call_count===1?120000:60000)||(absence?e.call_count<2:e.call_count>=3)){await client.query("ROLLBACK");return res.status(409).json({error:"Ação indisponível neste momento."});}
+ if(absence)await client.query("UPDATE public.queue_entries SET status='no_show',service_finished_at=now() WHERE id=$1",[id]);
+ else{await client.query("UPDATE public.queue_entries SET called_at=now() WHERE id=$1",[id]);await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[id,req.staff.id,req.device?.room_id??null]);}
+ await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,$2,'queue_entry',$3)",[req.staff.id,absence?"reception.no-show":"reception.recall",id]);await client.query("COMMIT");return res.json({status:absence?"no_show":"called",entryId:id});
  }catch(e){await client.query("ROLLBACK").catch(()=>{});return fail(res,e);}finally{client.release();}
 }
