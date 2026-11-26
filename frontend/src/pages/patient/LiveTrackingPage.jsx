@@ -28,7 +28,7 @@ export default function LiveTrackingPage() {
     if(!p.vibration)pending.vibration=false;
     if(!p.sound)pending.sound=false;
     if(pending.vibration&&vibrate())pending.vibration=false;
-    if(pending.sound&&beep(audio.current))pending.sound=false;
+    if(pending.sound)try{if(beep(audio.current))pending.sound=false;}catch{}
   }
   async function testNotifications(){const vibrationOk=draft.vibration?vibrate():null;const soundOk=draft.sound?(await unlockAudio()&&beep(audio.current)):null;setTestResult([draft.sound?(soundOk?"Som enviado.":"Som bloqueado ou indisponível."):"Som desativado.",draft.vibration?(vibrationOk?"Vibração solicitada.":"Vibração bloqueada ou incompatível."):"Vibração desativada."].join(" "));}
   function closeSettings(){setSettingsOpen(false);settingsButton.current?.focus();}
@@ -37,11 +37,12 @@ export default function LiveTrackingPage() {
   useEffect(()=>{if(!settingsOpen)return;const escape=e=>{if(e.key==="Escape")closeSettings();};document.addEventListener("keydown",escape);return()=>document.removeEventListener("keydown",escape);},[settingsOpen]);
   useEffect(()=>{
     if(!ticket)return;
-    const snapshot=JSON.stringify([token,ticket.status,ticket.stage_type,ticket.queue_name,ticket.destination_name??null,ticket.status==="waiting"?ticket.ahead??null:null,ticket.status==="waiting"?ticket.estimated_wait_minutes??null:null,ticket.status==="called"?ticket.call_count??null:null,ticket.status==="called"?ticket.latest_called_at??ticket.called_at??null:null]);
+    const snapshot=JSON.stringify([token,ticket.status,ticket.stage_type,ticket.queue_name,ticket.destination_name??null,ticket.status==="waiting"?ticket.ahead??null:null,ticket.status==="called"?ticket.call_count??null:null,ticket.status==="called"?ticket.latest_called_at??ticket.called_at??null:null]);
     const previous=lastSnapshot.current;
     if(previous!==snapshot){
       lastSnapshot.current=snapshot;
-      if(previous!==null||ticket.status==="called")pendingAlert.current={sound:preferences.sound,vibration:preferences.vibration};
+      if((previous!==null&&JSON.parse(previous)[0]===token)||ticket.status==="called")pendingAlert.current={sound:preferences.sound,vibration:preferences.vibration};
+      else pendingAlert.current={sound:false,vibration:false};
     }
     notify(preferences);
   },[preferences,ticket,token]);
