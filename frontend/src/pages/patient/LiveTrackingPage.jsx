@@ -57,7 +57,8 @@ export default function LiveTrackingPage() {
   const place = reception ? "guichê" : "consultório";
   const instruction = called ? (destination ? `Dirija-se ao ${destination}.` : `Você foi chamado! Dirija-se ao ${place} indicado pela equipe.`) : "";
   const status = STATUS[ticket?.status] ?? ticket?.status;
-  const ahead = Number.isFinite(Number(ticket?.ahead)) ? Number(ticket.ahead) : null;
+  const ahead = ticket?.ahead != null && Number.isFinite(Number(ticket.ahead)) ? Number(ticket.ahead) : null;
+  const estimate = ticket?.estimated_wait_minutes != null && Number.isFinite(Number(ticket.estimated_wait_minutes)) ? Number(ticket.estimated_wait_minutes) : null;
   const firstInLine = ticket?.status === "waiting" && ahead === 0;
 
   return <div className={`tracking-page tracking-page--font-${fontLevel} tracking-live`}>
@@ -83,7 +84,7 @@ export default function LiveTrackingPage() {
             <h2>{ticket.queue_name}</h2>
           </section>
           {firstInLine && <section className="tracking-first-in-line" role="status"><span className="tracking-first-icon" aria-hidden="true">✓</span><div><strong>Você é a primeira pessoa da fila {ticket.legal_priority?"prioritária":"normal"}!</strong><p>A chamada alterna entre as categorias. Aguarde sua senha.</p></div></section>}
-          {ticket.status==="waiting"&&ahead!==null&&ahead>0&&<p>Posição na fila {ticket.legal_priority?"prioritária":"normal"}: {ahead+1}º</p>}{called&&destination&&<section className="tracking-call-timer" aria-label="Destino do atendimento"><span>DIRIJA-SE AO</span><strong style={{fontSize:"clamp(28px,7vw,48px)",overflowWrap:"anywhere"}}>{destination}</strong></section>}{called && <section className={`tracking-call-timer ${expired ? "tracking-call-timer--expired" : ""}`} aria-label="Tempo restante para comparecimento">
+          {ticket.status==="waiting"&&ahead!==null&&ahead>0&&<section className="tracking-details" aria-label="Posição e estimativa de espera"><div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:16,textAlign:"center"}}><div><p className="tracking-field-label">SUA POSIÇÃO</p><strong style={{fontSize:"2em"}}>{ahead+1}º</strong><p>Fila {ticket.legal_priority?"prioritária":"normal"}</p></div><div><p className="tracking-field-label">ESPERA ESTIMADA</p><strong style={{fontSize:"2em"}}>{estimate===null?"—":`${estimate} min`}</strong></div></div><p>Estimativa aproximada, sujeita à alternância das chamadas e à duração dos atendimentos.</p></section>}{called&&destination&&<section className="tracking-call-timer" aria-label="Destino do atendimento"><span>DIRIJA-SE AO</span><strong style={{fontSize:"clamp(28px,7vw,48px)",overflowWrap:"anywhere"}}>{destination}</strong></section>}{called && <section className={`tracking-call-timer ${expired ? "tracking-call-timer--expired" : ""}`} aria-label="Tempo restante para comparecimento">
             <span>{expired ? "TEMPO ENCERRADO" : "TEMPO PARA COMPARECER"}</span>
             <strong role="timer" aria-live="off">{remaining === null ? "--:--" : formatTime(remaining)}</strong>
             <p>{expired ? "O responsável pelo seu atendimento irá encerrá-lo a qualquer momento." : remaining === null ? "Aguardando horário da chamada no servidor." : "O cronômetro começa no instante da chamada registrada pelo profissional."}</p>
