@@ -19,7 +19,7 @@ export default function DoctorPage(){
  const active=data.entries.find(p=>(p.status==="in_service"||p.status==="called")&&p.called_room_id===data.doctor?.room_id);
  const otherCalls=data.entries.filter(p=>p.status!=="waiting"&&p.called_room_id!==data.doctor?.room_id);
  const current=active??data.entries.find(p=>p.id===selected)??waiting[0]??null;
- const remaining=current?.status==="called"&&current.called_at?Math.max(0,new Date(current.called_at).getTime()+CALL_TIMEOUT_MS-now):null;
+ const remaining=current?.status==="called"&&current.called_at?Math.max(0,new Date(current.called_at).getTime()+(current.call_count>1?60000:120000)-now):null;
  async function action(kind){
   if(!current||busy)return;
   setBusy(true);setNotice("");setError("");
@@ -41,10 +41,10 @@ export default function DoctorPage(){
      {otherCalls.map(p=><div key={p.id} className="medical-queue-item"><strong>{p.ticket_code}</strong><span>{p.called_room_name??"Outro consultório"}</span><span>Em atendimento</span></div>)}{!waiting.length&&<p className="medical-quiet">Nenhum paciente aguardando.</p>}</section>
      <section className="medical-panel medical-care-panel"><div className="medical-panel-heading"><div><h2>Atendimento atual</h2><p>{current?"Ficha e ações do paciente":"Sem paciente selecionado"}</p></div><span>{current?({waiting:"Aguardando",called:"Chamado",in_service:"Em consulta"})[current.status]:"Livre"}</span></div>
       {current?<><div className="medical-current"><span>SENHA</span><strong>{current.ticket_code}</strong><div><h3>{current.patient_name??"Paciente sem identificação"}</h3><p>{doctor.queue_name} · {current.payment_category==="insurance"?"Convênio":"Particular"}{current.legal_priority?" · Prioritário":""}</p></div></div>
-       {current.status==="called"&&<div className={"medical-countdown"+(remaining===0?" medical-countdown--expired":"")}><span>TEMPO PARA COMPARECIMENTO</span><strong>{formatRemaining(remaining??0)}</strong><p>{remaining===0?"Prazo encerrado. Confirme a chegada ou registre a ausência.":"O paciente tem dois minutos para chegar."}</p></div>}
+       {current.status==="called"&&<div className={"medical-countdown"+(remaining===0?" medical-countdown--expired":"")}><span>TEMPO PARA COMPARECIMENTO</span><strong>{formatRemaining(remaining??0)}</strong><p>{remaining===0?"Prazo encerrado. Confirme a chegada ou registre a ausência.":"Aguarde o prazo desta chamada."}</p></div>}
        <div className="medical-action-stack">
         {current.status==="waiting"&&<button className="medical-primary" disabled={busy||Boolean(active)} onClick={()=>action("call")}>Chamar paciente</button>}
-        {current.status==="called"&&<><button className="medical-primary" disabled={busy} onClick={()=>action("arrival")}>Confirmar chegada e iniciar consulta</button><button className="medical-secondary" disabled={busy} onClick={()=>action("recall")}>Segunda chamada</button>{remaining===0&&<button className="medical-secondary" disabled={busy} onClick={()=>setDialog("no-show")}>Registrar ausência</button>}</>}
+        {current.status==="called"&&<><button className="medical-primary" disabled={busy} onClick={()=>action("arrival")}>Confirmar chegada e iniciar consulta</button>{current.call_count<3&&<button className="medical-secondary" disabled={busy||remaining!==0} onClick={()=>action("recall")}>{current.call_count===1?"Realizar segunda chamada":"Chamar mais um minuto"}</button>}{remaining===0&&current.call_count>=2&&<button className="medical-secondary" disabled={busy} onClick={()=>setDialog("no-show")}>Registrar ausência</button>}</>}
         {current.status==="in_service"&&<><button className="medical-primary" disabled={busy} onClick={()=>setDialog("complete")}>Encerrar atendimento</button><button className="medical-secondary" disabled={busy} onClick={()=>setDialog("return")}>Encaminhar à recepção</button></>}
        </div></>:<p className="medical-quiet">Aguardando pacientes da recepção.</p>}
      </section></div></>}
