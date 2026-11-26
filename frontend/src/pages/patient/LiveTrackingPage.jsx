@@ -18,21 +18,33 @@ export default function LiveTrackingPage() {
   const [preferences,setPreferences]=useState(()=>{try{const p=JSON.parse(localStorage.getItem("sica_tracking_alerts"));return {sound:p?.sound!==false,vibration:p?.vibration!==false};}catch{return {sound:true,vibration:true};}});
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [draft,setDraft]=useState(preferences);
-  const audio=useRef(null),lastSound=useRef(null),lastVibration=useRef(null),settingsButton=useRef(null);
+  const audio=useRef(null),lastSnapshot=useRef(null),pendingAlert=useRef({sound:false,vibration:false}),settingsButton=useRef(null);
   const [testResult,setTestResult]=useState("");
   function beep(ctx){if(ctx?.state!=="running")return false;[0,.4,.8].forEach(offset=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=880;gain.gain.value=.35;osc.connect(gain);gain.connect(ctx.destination);osc.start(ctx.currentTime+offset);osc.stop(ctx.currentTime+offset+.28);});return true;}
   async function unlockAudio(){try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return false;audio.current??=new Audio();if(audio.current.state!=="running")await audio.current.resume();return audio.current.state==="running";}catch{return false;}}
   function vibrate(){try{return navigator.vibrate?.([400,180,400,180,600])===true;}catch{return false;}}
-  function notify(p){if(ticket?.status!=="called")return;const key=ticket.latest_called_at??ticket.called_at;if(!key)return;
-    if(p.vibration&&lastVibration.current!==key&&vibrate())lastVibration.current=key;
-    if(p.sound&&lastSound.current!==key&&beep(audio.current))lastSound.current=key;
+  function notify(p){
+    const pending=pendingAlert.current;
+    if(!p.vibration)pending.vibration=false;
+    if(!p.sound)pending.sound=false;
+    if(pending.vibration&&vibrate())pending.vibration=false;
+    if(pending.sound&&beep(audio.current))pending.sound=false;
   }
   async function testNotifications(){const vibrationOk=draft.vibration?vibrate():null;const soundOk=draft.sound?(await unlockAudio()&&beep(audio.current)):null;setTestResult([draft.sound?(soundOk?"Som enviado.":"Som bloqueado ou indisponível."):"Som desativado.",draft.vibration?(vibrationOk?"Vibração solicitada.":"Vibração bloqueada ou incompatível."):"Vibração desativada."].join(" "));}
   function closeSettings(){setSettingsOpen(false);settingsButton.current?.focus();}
   function saveSettings(){if(draft.sound)unlockAudio().then(()=>notify(draft));else notify(draft);setPreferences(draft);try{localStorage.setItem("sica_tracking_alerts",JSON.stringify(draft));}catch{}closeSettings();}
   useEffect(()=>{const unlock=()=>{notify(preferences);if(preferences.sound)unlockAudio().then(()=>notify(preferences));};document.addEventListener("click",unlock);document.addEventListener("keydown",unlock);return()=>{document.removeEventListener("click",unlock);document.removeEventListener("keydown",unlock);};},[preferences,ticket]);
   useEffect(()=>{if(!settingsOpen)return;const escape=e=>{if(e.key==="Escape")closeSettings();};document.addEventListener("keydown",escape);return()=>document.removeEventListener("keydown",escape);},[settingsOpen]);
-  useEffect(()=>{notify(preferences);},[preferences,ticket]);
+  useEffect(()=>{
+    if(!ticket)return;
+    const snapshot=JSON.stringify([token,ticket.status,ticket.stage_type,ticket.queue_name,ticket.destination_name??null,ticket.status==="waiting"?ticket.ahead??null:null,ticket.status==="called"?ticket.call_count??null:null,ticket.status==="called"?ticket.latest_called_at??ticket.called_at??null:null]);
+    const previous=lastSnapshot.current;
+    if(previous!==snapshot){
+      lastSnapshot.current=snapshot;
+      if(previous!==null||ticket.status==="called")pendingAlert.current={sound:preferences.sound,vibration:preferences.vibration};
+    }
+    notify(preferences);
+  },[preferences,ticket,token]);
   useEffect(() => {
     const interval = setInterval(() => setClock(Date.now()), 250);
     return () => clearInterval(interval);
