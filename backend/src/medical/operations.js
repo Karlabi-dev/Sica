@@ -47,7 +47,7 @@ export async function medicalOverview(req,res){
 }
 export async function medicalAction(req,res){
  res.set("Cache-Control","no-store");if(deny(req,res))return;
- const {entryId,action}=req.params;
+ let {entryId,action}=req.params;
  if(!uuid(entryId)||!["call","recall","arrival","complete","return","no-show"].includes(action))return res.status(400).json({error:"Ação inválida"});
  const client=await getPool().connect();
  try{
@@ -56,10 +56,15 @@ export async function medicalAction(req,res){
   if(!doctor){await client.query("ROLLBACK");return res.status(403).json({error:"Dispositivo sem sala autorizada"});}
   if(!doctor.queue_definition_id){await client.query('ROLLBACK');return res.status(409).json({error:'Nenhuma fila médica ativa para este consultório.'});}
   await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',['medical:'+doctor.queue_definition_id]);
+  await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',['medical-room:'+doctor.room_id]);
+  if(action==='call'&&req.body?.automatic===true){
+   const next=await client.query(`SELECT e.id FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id WHERE qs.definition_id=$1 AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now() AND qi.active AND e.status='waiting' AND (($2='shared' AND qi.professional_id IS NULL) OR ($2='individual' AND qi.professional_id=$3)) ORDER BY e.enqueued_at,e.id LIMIT 1 FOR UPDATE OF e`,[doctor.queue_definition_id,doctor.queue_mode,doctor.staff_user_id]);
+   if(!next.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'Nenhum paciente aguardando nesta fila.'});}entryId=next.rows[0].id;
+  }
   const {rows}=await client.query(`SELECT e.*,qi.professional_id,qs.definition_id,qd.queue_mode FROM public.queue_entries e
    JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id
    JOIN public.queue_definitions qd ON qd.id=qs.definition_id
-   WHERE e.id=$1 AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now() FOR UPDATE OF e`,[entryId]);
+   WHERE e.id=$1 AND qi.active=true AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now() FOR UPDATE OF e`,[entryId]);
   const e=rows[0];
   if(!e||e.definition_id!==doctor.queue_definition_id||(doctor.queue_mode==="individual"&&e.professional_id!==doctor.staff_user_id)||(doctor.queue_mode==="shared"&&e.professional_id!==null)){
    await client.query("ROLLBACK");return res.status(404).json({error:"Senha não pertence à fila deste médico"});
@@ -71,9 +76,9 @@ export async function medicalAction(req,res){
    if(owner?.room_id!==doctor.room_id){await client.query("ROLLBACK");return res.status(403).json({error:"Esta senha pertence a outro consultório."});}
   }
   if(action==="call"){
-   const busy=await client.query(`SELECT 1 FROM public.queue_entries x JOIN LATERAL (SELECT room_id FROM public.call_events WHERE queue_entry_id=x.id ORDER BY called_at DESC,id DESC LIMIT 1) ce ON true
+   const busy=await client.query(`SELECT 1 FROM public.queue_entries x JOIN LATERAL (SELECT room_id FROM public.call_events WHERE queue_entry_id=x.id AND called_at>=x.enqueued_at ORDER BY called_at DESC,id DESC LIMIT 1) ce ON true
     WHERE x.status IN ('called','in_service') AND ce.room_id=$1 AND x.id<>$2 LIMIT 1`,[doctor.room_id,entryId]);
-   if(busy.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Finalize o paciente atual antes de chamar outro"});}
+   if(busy.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Finalize o atendimento deste consultório antes de chamar outro paciente."});}
    await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[entryId]);
    await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,req.staff.id,doctor.room_id]);
   }else if(action==="recall"){
@@ -109,6 +114,6 @@ export async function medicalAction(req,res){
   }
   await client.query(`INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata)
    VALUES($1,$2,'queue_entry',$3,$4::jsonb)`,[req.staff.id,"medical."+action,entryId,JSON.stringify({statusFrom:e.status})]);
-  await client.query("COMMIT");return res.json({status:action==="return"?"transferred":action});
+  await client.query("COMMIT");return res.json({status:action==="return"?"transferred":action,entryId,roomId:doctor.room_id});
  }catch(error){await client.query("ROLLBACK").catch(()=>{});if(error.status===409)return res.status(409).json({error:error.message});return fail(res,error);}finally{client.release();}
 }
