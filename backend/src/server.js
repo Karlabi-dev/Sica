@@ -8,7 +8,7 @@ import { rateLimit } from "./security/rateLimit.js";
 import { revokeAdminSession } from "./auth/adminEmailSession.js";
 import { clinicPublic, issueKioskTicket, trackTicket } from "./kiosk/tickets.js";
 import { requestAdminEmailCode, verifyAdminEmailCode } from "./auth/adminEmailChallenge.js";
-import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, receptionTrackingLink, receptionReturn, receptionRecall } from "./reception/operations.js";
+import { receptionOverview, receptionCall, receptionArrival, receptionHandoff, receptionTrackingLink, receptionReturn, receptionRecall, receptionClose } from "./reception/operations.js";
 
 import {readClinicSettings,updateClinicSettings} from "./admin/settings.js";
 import { adminAnalytics } from "./admin/analytics.js";
@@ -94,6 +94,7 @@ app.post("/staff/medical/entries/:entryId/:action", operationalAuth, medicalActi
 app.get("/staff/reception/overview", operationalAuth, receptionOverview);
 app.post("/staff/reception/entries/:entryId/call", operationalAuth, receptionCall);
 app.post("/staff/reception/entries/:entryId/arrival", operationalAuth, receptionArrival);
+app.post("/staff/reception/entries/:entryId/complete", operationalAuth, receptionClose);
 app.post("/staff/reception/entries/:entryId/return", operationalAuth, receptionReturn);
 app.post("/staff/reception/entries/:entryId/handoff", operationalAuth, receptionHandoff);
 app.post("/staff/reception/entries/:entryId/tracking-link", operationalAuth, receptionTrackingLink);
