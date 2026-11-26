@@ -88,7 +88,7 @@ export default function LiveTrackingPage() {
       </section></div>}
       <main className="tracking-main">
         <p className="tracking-eyebrow">ACOMPANHAMENTO EM TEMPO REAL</p>
-        <h1>{called ? "É a sua vez!" : "Acompanhe seu atendimento"}</h1>{called&&<p role="status" style={{fontSize:"1.35rem",fontWeight:700,textAlign:"center"}}>{ticket.call_count>=3?"Terceira chamada":ticket.call_count===2?"Segunda chamada":"Primeira chamada"}</p>
+        <h1>{called ? "É a sua vez!" : "Acompanhe seu atendimento"}</h1>{called&&<p role="status" style={{fontSize:"1.35rem",fontWeight:700,textAlign:"center"}}>{ticket.call_count>=3?"Terceira chamada":ticket.call_count===2?"Segunda chamada":"Primeira chamada"}</p>}
         {ticket ? <>
           <section className="tracking-ticket" aria-label="Informações da sua senha">
             <span className="tracking-ticket-label">SUA SENHA</span>
