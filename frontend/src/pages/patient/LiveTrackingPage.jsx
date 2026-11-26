@@ -50,7 +50,7 @@ export default function LiveTrackingPage() {
   const awaitingDoctor = !reception && ticket?.status === "waiting";
   const called = ticket?.status === "called";
   const callTime = ticket?.latest_called_at ?? ticket?.called_at;
-  const remaining = called && callTime ? Math.max(0, new Date(callTime).getTime() + CALL_DURATION - (clock + serverOffset)) : null;
+  const remaining = called && callTime ? Math.max(0, new Date(callTime).getTime() +(ticket.call_count>1?60000:120000) - (clock + serverOffset)) : null;
   const expired = remaining === 0;
   const destination = ticket?.destination_name;
   const place = reception ? "guichê" : "consultório";
@@ -81,15 +81,15 @@ export default function LiveTrackingPage() {
             <p className="tracking-field-label">ETAPA DO ATENDIMENTO</p>
             <h2>{ticket.queue_name}</h2>
           </section>
-          {firstInLine && <section className="tracking-first-in-line" role="status"><span className="tracking-first-icon" aria-hidden="true">✓</span><div><strong>Você é a primeira pessoa da fila!</strong><p>Assim que os atendimentos começarem, você será {reception ? "chamada para a recepção" : "chamada para o consultório"}. Fique atenta à sua senha.</p></div></section>}
-          {called && <section className={`tracking-call-timer ${expired ? "tracking-call-timer--expired" : ""}`} aria-label="Tempo restante para comparecimento">
+          {firstInLine && <section className="tracking-first-in-line" role="status"><span className="tracking-first-icon" aria-hidden="true">✓</span><div><strong>Você é a primeira pessoa da fila {ticket.legal_priority?"prioritária":"normal"}!</strong><p>A chamada alterna entre as categorias. Aguarde sua senha.</p></div></section>}
+          {ticket.status==="waiting"&&ahead!==null&&ahead>0&&<p>Posição na fila {ticket.legal_priority?"prioritária":"normal"}: {ahead+1}º</p>}{called&&destination&&<section className="tracking-call-timer" aria-label="Destino do atendimento"><span>DIRIJA-SE AO</span><strong style={{fontSize:"clamp(28px,7vw,48px)",overflowWrap:"anywhere"}}>{destination}</strong></section>}{called && <section className={`tracking-call-timer ${expired ? "tracking-call-timer--expired" : ""}`} aria-label="Tempo restante para comparecimento">
             <span>{expired ? "TEMPO ENCERRADO" : "TEMPO PARA COMPARECER"}</span>
             <strong role="timer" aria-live="off">{remaining === null ? "--:--" : formatTime(remaining)}</strong>
             <p>{expired ? "O responsável pelo seu atendimento irá encerrá-lo a qualquer momento." : remaining === null ? "Aguardando horário da chamada no servidor." : "O cronômetro começa no instante da chamada registrada pelo profissional."}</p>
           </section>}
           <aside className={`tracking-notice tracking-notice--${called ? "called" : "waiting"}`} role="status">
             <strong>{called ? "Você foi chamado!" : firstInLine ? "Sua vez está chegando" : awaitingDoctor ? "Aguarde o médico iniciar os atendimentos" : ticket.status === "waiting" ? "Aguarde sua chamada" : status}</strong>
-            <p>{called ? instruction : firstInLine ? "A chamada aparecerá aqui automaticamente quando a equipe iniciar o atendimento." : awaitingDoctor ? "Você já foi encaminhado. Quando o médico chamar sua senha, esta página exibirá a chamada e o cronômetro de 2 minutos." : ticket.status === "waiting" ? "Fique atento ao painel de senhas. Esta página é atualizada automaticamente." : "Para mais informações, procure a equipe da clínica."}</p>
+            <p>{called ? instruction : firstInLine ? "A chamada aparecerá aqui automaticamente quando a equipe iniciar o atendimento." : awaitingDoctor ? "Você já foi encaminhado. Quando o médico chamar sua senha, esta página exibirá a chamada e o cronômetro de comparecimento." : ticket.status === "waiting" ? "Fique atento ao painel de senhas. Esta página é atualizada automaticamente." : "Para mais informações, procure a equipe da clínica."}</p>
           </aside>
           {error && <p role="status" className="tracking-live-error">{error}</p>}
         </> : <p role="status">{error || "Consultando sua senha..."}</p>}
