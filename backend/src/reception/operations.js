@@ -45,20 +45,23 @@ export async function receptionCall(req,res) {
   const client=await getPool().connect();
   try {
     await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('sica-reception-call'))");
+    let target=entryId;
+    if(req.body?.automatic===true){const next=await client.query(`SELECT e.id FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id JOIN public.queue_definitions q ON q.id=qs.definition_id WHERE e.status='waiting' AND q.stage_type='reception' AND q.active AND qi.active AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now() ORDER BY (e.legal_priority=COALESCE((SELECT NOT x.legal_priority FROM public.call_events ce JOIN public.queue_entries x ON x.id=ce.queue_entry_id JOIN public.queue_instances xi ON xi.id=x.queue_id JOIN public.queue_sessions xs ON xs.id=xi.session_id JOIN public.queue_definitions xd ON xd.id=xs.definition_id WHERE xd.stage_type='reception' AND ce.called_at >= date_trunc('day',now() AT TIME ZONE 'America/Fortaleza') AT TIME ZONE 'America/Fortaleza' ORDER BY ce.called_at DESC,ce.id DESC LIMIT 1),true)) DESC,e.enqueued_at,e.id LIMIT 1 FOR UPDATE OF e`);if(!next.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'Nenhuma senha aguardando'});}target=next.rows[0].id;}
     const {rows}=await client.query(`SELECT e.id,e.status,qd.stage_type FROM public.queue_entries e
       JOIN public.queue_instances qi ON qi.id=e.queue_id JOIN public.queue_sessions qs ON qs.id=qi.session_id
-      JOIN public.queue_definitions qd ON qd.id=qs.definition_id WHERE e.id=$1 FOR UPDATE OF e`,[entryId]);
+      JOIN public.queue_definitions qd ON qd.id=qs.definition_id WHERE e.id=$1 AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now() AND qi.active=true FOR UPDATE OF e`,[target]);
     if (!rows[0] || rows[0].stage_type!=="reception" || rows[0].status!=="waiting") {
       await client.query("ROLLBACK");return res.status(409).json({error:"Senha não está aguardando na recepção"});
     }
     const active=await client.query(`SELECT 1 FROM public.queue_entries e JOIN public.call_events c ON c.queue_entry_id=e.id
-      WHERE e.status='called' AND c.called_by=$1 AND e.id<>$2 LIMIT 1`,[req.staff.id,entryId]);
+      WHERE e.status='called' AND c.called_by=$1 AND e.id<>$2 LIMIT 1`,[req.staff.id,target]);
     if (active.rows.length) {await client.query("ROLLBACK");return res.status(409).json({error:"Conclua a chamada atual antes de chamar outra senha"});}
-    await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[entryId]);
-    await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id,called_at) VALUES($1,$2,$3,now())",[entryId,req.staff.id,req.device?.room_id??null]);
+    await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[target]);
+    await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id,called_at) VALUES($1,$2,$3,now())",[target,req.staff.id,req.device?.room_id??null]);
     await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id) VALUES($1,'reception.call','queue_entry',$2)",[req.staff.id,entryId]);
     await client.query("COMMIT");
-    return res.json({status:"called"});
+    return res.json({status:"called",entryId:target});
   } catch(error) {await client.query("ROLLBACK").catch(()=>{});return fail(res,error);} finally {client.release();}
 }
 
