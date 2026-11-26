@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import "./TrackingPage.css";
 
@@ -15,6 +15,10 @@ export default function LiveTrackingPage() {
   const [clock, setClock] = useState(Date.now());
   const [serverOffset, setServerOffset] = useState(0);
   const [fontLevel, setFontLevel] = useState(0);
+  const [alerts,setAlerts]=useState(false);
+  const audio=useRef(null),lastCall=useRef(null);
+  async function enableAlerts(){try{const Audio=window.AudioContext||window.webkitAudioContext;if(Audio){audio.current??=new Audio();await audio.current.resume();}setAlerts(true);}catch{setAlerts(false);}}
+  useEffect(()=>{if(!alerts||ticket?.status!=='called')return;const key=ticket.latest_called_at??ticket.called_at;if(!key||lastCall.current===key)return;lastCall.current=key;try{navigator.vibrate?.([300,150,300,150,500]);const ctx=audio.current;if(ctx?.state==='running'){[0,.35,.7].forEach(offset=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=880;gain.gain.value=.12;osc.connect(gain);gain.connect(ctx.destination);osc.start(ctx.currentTime+offset);osc.stop(ctx.currentTime+offset+.22);});}}catch{}},[alerts,ticket]);
   useEffect(() => {
     const interval = setInterval(() => setClock(Date.now()), 250);
     return () => clearInterval(interval);
@@ -66,7 +70,7 @@ export default function LiveTrackingPage() {
       </header>
       <main className="tracking-main">
         <p className="tracking-eyebrow">ACOMPANHAMENTO EM TEMPO REAL</p>
-        <h1>{called ? "É a sua vez!" : "Acompanhe seu atendimento"}</h1>
+        <h1>{called ? "É a sua vez!" : "Acompanhe seu atendimento"}</h1><button type="button" onClick={enableAlerts} disabled={alerts} style={{marginBottom:12,padding:"10px 14px",borderRadius:8}}>{alerts?"Alertas de chamada ativados":"Ativar som e vibração"}</button>
         {ticket ? <>
           <section className="tracking-ticket" aria-label="Informações da sua senha">
             <span className="tracking-ticket-label">SUA SENHA</span>
