@@ -37,7 +37,7 @@ export default function LiveTrackingPage() {
   useEffect(()=>{if(!settingsOpen)return;const escape=e=>{if(e.key==="Escape")closeSettings();};document.addEventListener("keydown",escape);return()=>document.removeEventListener("keydown",escape);},[settingsOpen]);
   useEffect(()=>{
     if(!ticket)return;
-    const snapshot=JSON.stringify([token,ticket.status,ticket.stage_type,ticket.queue_name,ticket.destination_name??null,ticket.status==="waiting"?ticket.ahead??null:null,ticket.status==="called"?ticket.call_count??null:null,ticket.status==="called"?ticket.latest_called_at??ticket.called_at??null:null]);
+    const snapshot=JSON.stringify([token,ticket.status,ticket.stage_type,ticket.queue_name,ticket.destination_name??null,ticket.status==="waiting"?ticket.ahead??null:null,ticket.status==="waiting"?ticket.estimated_wait_minutes??null:null,ticket.status==="called"?ticket.call_count??null:null,ticket.status==="called"?ticket.latest_called_at??ticket.called_at??null:null]);
     const previous=lastSnapshot.current;
     if(previous!==snapshot){
       lastSnapshot.current=snapshot;
