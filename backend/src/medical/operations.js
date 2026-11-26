@@ -24,7 +24,7 @@ async function resolveDoctor(client,req){
  queue_definition_id:q?.queue_definition_id??null,queue_name:q?.queue_name??null,queue_mode:q?.queue_mode??null,
  staff_user_id:q?.professional_id??req.staff.id};
 }
-const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,
+const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,(SELECT count(*)::int FROM public.call_events cc WHERE cc.queue_entry_id=e.id) AS call_count,
  CASE WHEN e.status='waiting' OR ce.room_id=$4 THEN p.full_name END AS patient_name, ce.room_id AS called_room_id, rm.name AS called_room_name
  FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id
  JOIN public.queue_sessions qs ON qs.id=qi.session_id
@@ -80,13 +80,17 @@ export async function medicalAction(req,res){
    await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[entryId]);
    await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,req.staff.id,doctor.room_id]);
   }else if(action==="recall"){
+   const count=Number((await client.query("SELECT count(*) FROM public.call_events WHERE queue_entry_id=$1",[entryId])).rows[0].count);
+   if(count>=3||Date.now()-new Date(e.called_at).getTime()<(count===1?120000:60000)){await client.query("ROLLBACK");return res.status(409).json({error:"Aguarde o prazo da chamada ou registre ausência após a terceira."});}
    await client.query("UPDATE public.queue_entries SET called_at=now() WHERE id=$1",[entryId]);
    await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,req.staff.id,doctor.room_id]);
   }else if(action==="arrival"){
    await client.query("UPDATE public.queue_entries SET status='in_service',service_started_at=now() WHERE id=$1",[entryId]);
   }else if(action==="no-show"){
    const tolerance=await client.query("SELECT COALESCE((to_jsonb(c)->'preferences'->>'arrivalToleranceMinutes')::int,2) AS minutes FROM public.clinic_settings c WHERE id=1");
-   const minutes=Math.max(1,Math.min(30,tolerance.rows[0]?.minutes??2));
+   const count=Number((await client.query("SELECT count(*) FROM public.call_events WHERE queue_entry_id=$1",[entryId])).rows[0].count);
+   if(count<2){await client.query("ROLLBACK");return res.status(409).json({error:"Realize a segunda chamada antes de registrar ausência."});}
+   const minutes=1;
    const late=await client.query("SELECT called_at<=now()-($2::int*interval '1 minute') AS expired FROM public.queue_entries WHERE id=$1",[entryId,minutes]);
    if(!late.rows[0]?.expired){await client.query("ROLLBACK");return res.status(409).json({error:`Aguarde ${minutes} minuto(s) após a chamada antes de registrar ausência.`});}
    await client.query("UPDATE public.queue_entries SET status='no_show',service_finished_at=now() WHERE id=$1",[entryId]);
