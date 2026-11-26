@@ -30,7 +30,7 @@ const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_cat
  JOIN public.queue_sessions qs ON qs.id=qi.session_id
  JOIN public.patient_journeys j ON j.id=e.journey_id
  LEFT JOIN public.patients p ON p.id=j.patient_id
- LEFT JOIN LATERAL (SELECT room_id FROM public.call_events WHERE queue_entry_id=e.id ORDER BY called_at DESC,id DESC LIMIT 1) ce ON true
+ LEFT JOIN LATERAL (SELECT room_id FROM public.call_events WHERE queue_entry_id=e.id AND called_at>=e.enqueued_at ORDER BY called_at DESC,id DESC LIMIT 1) ce ON true
  LEFT JOIN public.rooms rm ON rm.id=ce.room_id
  WHERE qs.definition_id=$1 AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now()
  AND qi.active=true AND ($2='shared' AND qi.professional_id IS NULL OR $2='individual' AND qi.professional_id=$3)
@@ -76,7 +76,11 @@ export async function medicalAction(req,res){
    if(owner?.room_id!==doctor.room_id){await client.query("ROLLBACK");return res.status(403).json({error:"Esta senha pertence a outro consultório."});}
   }
   if(action==="call"){
-   const busy=await client.query(`SELECT 1 FROM public.queue_entries x JOIN LATERAL (SELECT room_id FROM public.call_events WHERE queue_entry_id=x.id AND called_at>=x.enqueued_at ORDER BY called_at DESC,id DESC LIMIT 1) ce ON true
+   const busy=await client.query(`SELECT x.id FROM public.queue_entries x
+    JOIN public.queue_instances qi ON qi.id=x.queue_id AND qi.active=true
+    JOIN public.queue_sessions qs ON qs.id=qi.session_id AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now()
+    JOIN public.queue_definitions q ON q.id=qs.definition_id AND q.active=true AND q.stage_type IN ('consultation','exam')
+    JOIN LATERAL (SELECT room_id FROM public.call_events WHERE queue_entry_id=x.id AND called_at>=x.enqueued_at ORDER BY called_at DESC,id DESC LIMIT 1) ce ON true
     WHERE x.status IN ('called','in_service') AND ce.room_id=$1 AND x.id<>$2 LIMIT 1`,[doctor.room_id,entryId]);
    if(busy.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Finalize o atendimento deste consultório antes de chamar outro paciente."});}
    await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[entryId]);
