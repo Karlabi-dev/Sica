@@ -24,7 +24,7 @@ async function resolveDoctor(client,req){
  queue_definition_id:q?.queue_definition_id??null,queue_name:q?.queue_name??null,queue_mode:q?.queue_mode??null,
  staff_user_id:q?.professional_id??req.staff.id};
 }
-const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,(SELECT count(*)::int FROM public.call_events cc WHERE cc.queue_entry_id=e.id) AS call_count,
+const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_category,e.enqueued_at,e.called_at,(SELECT count(*)::int FROM public.call_events cc WHERE cc.queue_entry_id=e.id AND cc.called_at>=e.enqueued_at) AS call_count,
  CASE WHEN e.status='waiting' OR ce.room_id=$4 THEN p.full_name END AS patient_name, ce.room_id AS called_room_id, rm.name AS called_room_name
  FROM public.queue_entries e JOIN public.queue_instances qi ON qi.id=e.queue_id
  JOIN public.queue_sessions qs ON qs.id=qi.session_id
@@ -36,7 +36,7 @@ const entries=`SELECT e.id,e.ticket_code,e.status,e.legal_priority,e.payment_cat
  AND qi.active=true AND ($2='shared' AND qi.professional_id IS NULL OR $2='individual' AND qi.professional_id=$3)
  AND e.status IN ('waiting','called','in_service')
  ORDER BY CASE WHEN e.status='in_service' THEN 0 WHEN e.status='called' THEN 1 ELSE 2 END,
- e.legal_priority DESC,e.enqueued_at,e.id LIMIT 200`;
+ e.enqueued_at,e.id LIMIT 200`;
 export async function medicalOverview(req,res){
  res.set("Cache-Control","no-store");if(deny(req,res))return;
  try{const pool=getPool();const doctor=await resolveDoctor(pool,req);
@@ -71,16 +71,13 @@ export async function medicalAction(req,res){
    if(owner?.room_id!==doctor.room_id){await client.query("ROLLBACK");return res.status(403).json({error:"Esta senha pertence a outro consultório."});}
   }
   if(action==="call"){
-   const last=(await client.query(`SELECT x.legal_priority FROM public.call_events ce JOIN public.queue_entries x ON x.id=ce.queue_entry_id WHERE x.queue_id=$1 GROUP BY x.id,x.legal_priority ORDER BY min(ce.called_at) DESC LIMIT 1`,[e.queue_id])).rows[0];
-   const preferred=last?!last.legal_priority:true;
-   if(e.legal_priority!==preferred&&(await client.query("SELECT 1 FROM public.queue_entries WHERE queue_id=$1 AND status='waiting' AND legal_priority=$2 LIMIT 1",[e.queue_id,preferred])).rowCount){await client.query('ROLLBACK');return res.status(409).json({error:preferred?'Chame uma senha prioritária nesta vez.':'Chame uma senha comum nesta vez.'});}
-   const busy=await client.query(`SELECT 1 FROM public.queue_entries x JOIN public.call_events ce ON ce.queue_entry_id=x.id
+   const busy=await client.query(`SELECT 1 FROM public.queue_entries x JOIN LATERAL (SELECT room_id FROM public.call_events WHERE queue_entry_id=x.id ORDER BY called_at DESC,id DESC LIMIT 1) ce ON true
     WHERE x.status IN ('called','in_service') AND ce.room_id=$1 AND x.id<>$2 LIMIT 1`,[doctor.room_id,entryId]);
    if(busy.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Finalize o paciente atual antes de chamar outro"});}
    await client.query("UPDATE public.queue_entries SET status='called',called_at=now() WHERE id=$1",[entryId]);
    await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,req.staff.id,doctor.room_id]);
   }else if(action==="recall"){
-   const count=Number((await client.query("SELECT count(*) FROM public.call_events WHERE queue_entry_id=$1",[entryId])).rows[0].count);
+   const count=Number((await client.query("SELECT count(*) FROM public.call_events WHERE queue_entry_id=$1 AND called_at>=$2",[entryId,e.enqueued_at])).rows[0].count);
    if(count>=3||Date.now()-new Date(e.called_at).getTime()<(count===1?120000:60000)){await client.query("ROLLBACK");return res.status(409).json({error:"Aguarde o prazo da chamada ou registre ausência após a terceira."});}
    await client.query("UPDATE public.queue_entries SET called_at=now() WHERE id=$1",[entryId]);
    await client.query("INSERT INTO public.call_events(queue_entry_id,called_by,room_id) VALUES($1,$2,$3)",[entryId,req.staff.id,doctor.room_id]);
@@ -88,7 +85,7 @@ export async function medicalAction(req,res){
    await client.query("UPDATE public.queue_entries SET status='in_service',service_started_at=now() WHERE id=$1",[entryId]);
   }else if(action==="no-show"){
    const tolerance=await client.query("SELECT COALESCE((to_jsonb(c)->'preferences'->>'arrivalToleranceMinutes')::int,2) AS minutes FROM public.clinic_settings c WHERE id=1");
-   const count=Number((await client.query("SELECT count(*) FROM public.call_events WHERE queue_entry_id=$1",[entryId])).rows[0].count);
+   const count=Number((await client.query("SELECT count(*) FROM public.call_events WHERE queue_entry_id=$1 AND called_at>=$2",[entryId,e.enqueued_at])).rows[0].count);
    if(count<2){await client.query("ROLLBACK");return res.status(409).json({error:"Realize a segunda chamada antes de registrar ausência."});}
    const minutes=1;
    const late=await client.query("SELECT called_at<=now()-($2::int*interval '1 minute') AS expired FROM public.queue_entries WHERE id=$1",[entryId,minutes]);
@@ -100,12 +97,13 @@ export async function medicalAction(req,res){
   }else{
    const reception=await client.query(`SELECT qi.id FROM public.queue_instances qi JOIN public.queue_sessions qs ON qs.id=qi.session_id
     JOIN public.queue_definitions q ON q.id=qs.definition_id
-    WHERE q.stage_type='reception' AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now()
+    WHERE q.stage_type='reception' AND q.active=true AND qs.status='active' AND qs.starts_at<=now() AND qs.ends_at>now()
     AND qi.professional_id IS NULL AND qi.active=true ORDER BY qs.starts_at DESC LIMIT 1`);
    if(!reception.rowCount){await client.query("ROLLBACK");return res.status(409).json({error:"Não existe fila de recepção ativa"});}
    await client.query("UPDATE public.queue_entries SET status='transferred',service_finished_at=now() WHERE id=$1",[entryId]);
    const next=await client.query(`INSERT INTO public.queue_entries(journey_id,queue_id,ticket_code,payment_category,legal_priority)
-    VALUES($1,$2,$3,$4,$5) RETURNING id`,[e.journey_id,reception.rows[0].id,e.ticket_code,e.payment_category,e.legal_priority]);
+    VALUES($1,$2,$3,$4,$5) ON CONFLICT(queue_id,ticket_code) DO UPDATE SET status='waiting',enqueued_at=clock_timestamp(),called_at=NULL,service_started_at=NULL,service_finished_at=NULL WHERE queue_entries.journey_id=EXCLUDED.journey_id AND queue_entries.status NOT IN ('waiting','called','in_service') RETURNING id`,[e.journey_id,reception.rows[0].id,e.ticket_code,e.payment_category,e.legal_priority]);
+   if(!next.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'Conflito de senha na recepção. Procure o administrador.'});}
    await client.query(`INSERT INTO public.queue_transfers(journey_id,from_entry_id,to_entry_id,transferred_by,reason)
     VALUES($1,$2,$3,$4,$5)`,[e.journey_id,entryId,next.rows[0].id,req.staff.id,(typeof req.body?.observation==="string"&&req.body.observation.trim()?req.body.observation.trim().slice(0,120):"Retorno à recepção")]);
   }
