@@ -127,7 +127,8 @@ export async function receptionHandoff(req,res) {
   await client.query("UPDATE public.patient_journeys SET patient_id=$2 WHERE id=$1",[entry.journey_id,patient.rows[0].id]);
   await client.query("UPDATE public.queue_entries SET status='transferred',service_finished_at=now() WHERE id=$1",[entryId]);
   const next=await client.query(`INSERT INTO public.queue_entries(journey_id,queue_id,ticket_code,payment_category,legal_priority)
-   VALUES($1,$2,$3,$4,$5) RETURNING id`,[entry.journey_id,instance.rows[0].id,entry.ticket_code,entry.payment_category,entry.legal_priority]);
+   VALUES($1,$2,$3,$4,$5) ON CONFLICT(queue_id,ticket_code) DO UPDATE SET status='waiting',enqueued_at=clock_timestamp(),called_at=NULL,service_started_at=NULL,service_finished_at=NULL WHERE queue_entries.journey_id=EXCLUDED.journey_id AND queue_entries.status NOT IN ('waiting','called','in_service') RETURNING id`,[entry.journey_id,instance.rows[0].id,entry.ticket_code,entry.payment_category,entry.legal_priority]);
+  if(!next.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'Conflito de senha na fila de destino.'});}
   await client.query("INSERT INTO public.audit_events(actor_user_id,action,resource_type,resource_id,metadata) VALUES($1,'reception.handoff','queue_entry',$2,$3::jsonb)",[req.staff.id,entryId,JSON.stringify({destinationQueueId:q.id,nextEntryId:next.rows[0].id})]);
   await client.query("COMMIT");
   return res.json({status:"transferred",entryId:next.rows[0].id,queueName:q.name,whatsappConfigured:false});
