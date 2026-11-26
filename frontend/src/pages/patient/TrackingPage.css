@@ -117,3 +117,28 @@
 .tracking-live .tracking-professional-footer{position:static!important;flex:0 0 auto!important;margin-top:auto}
 
 .tracking-first-in-line{display:flex;align-items:flex-start;gap:14px;margin:20px 0 12px;padding:20px;border:1px solid #bce5da;border-radius:14px;background:linear-gradient(135deg,#ecfaf5,#f3fbfd);color:#205d61}.tracking-first-icon{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:50%;background:#d0f1e4;color:#17785c;font-size:19px;font-weight:800}.tracking-first-in-line strong{display:block;font-size:1.08em;line-height:1.35;color:#155d59}.tracking-first-in-line p{margin:8px 0 0;font-size:.96em;line-height:1.65;color:#496e73}
+
+/* Patient notification settings */
+.tracking-font-controls .tracking-settings-trigger{display:grid;place-items:center;min-width:36px;padding:6px;color:#0c4f8b}
+.tracking-settings-backdrop{position:fixed;inset:0;z-index:1000;background:rgba(15,35,52,.46);display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)}
+.tracking-settings-modal{box-sizing:border-box;width:min(100%,420px);max-height:calc(100dvh - 32px);overflow:auto;background:#fff;color:#17364a;border:1px solid #dbe8eb;border-radius:22px;padding:24px;box-shadow:0 18px 64px rgba(15,35,52,.2);text-align:left}
+.tracking-settings-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.tracking-settings-head span{font-size:11px;font-weight:700;letter-spacing:.12em;color:#16877e}
+.tracking-settings-head h2{font-size:25px;margin:5px 0 0;color:#0c4f8b}
+.tracking-settings-head button{border:0;border-radius:10px;background:#eff5f7;color:#345366;font-size:26px;line-height:1;width:38px;height:38px;cursor:pointer}
+.tracking-settings-modal>p{font-size:14px;line-height:1.5;color:#526775;margin:12px 0 18px}
+.tracking-settings-option{position:relative;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:17px 0;border-top:1px solid #e4edef;cursor:pointer}
+.tracking-settings-option strong,.tracking-settings-option small{display:block}
+.tracking-settings-option strong{font-size:16px;color:#17364a}
+.tracking-settings-option small{font-size:13px;line-height:1.45;color:#526775;margin-top:5px}
+.tracking-settings-option input{position:absolute;right:0;width:48px;height:28px;opacity:0;cursor:pointer}
+.tracking-switch{flex:0 0 48px;height:28px;border-radius:30px;background:#a7b6c0;position:relative;transition:background .18s}
+.tracking-switch:after{content:"";position:absolute;top:4px;left:4px;width:20px;height:20px;background:white;border-radius:50%;box-shadow:0 1px 4px #0002;transition:transform .18s}
+.tracking-settings-option input:checked+.tracking-switch{background:#16877e}
+.tracking-settings-option input:checked+.tracking-switch:after{transform:translateX(20px)}
+.tracking-settings-option input:focus-visible+.tracking-switch{outline:3px solid #1e82bc;outline-offset:4px}
+.tracking-settings-hint{display:block;font-size:12px;color:#526775;line-height:1.5;margin:8px 0 20px}
+.tracking-settings-save{width:100%;border:0;border-radius:12px;padding:14px;background:#16877e;color:white;font-size:15px;font-weight:700;cursor:pointer}
+.tracking-settings-save:hover{background:#116d66}
+@media(max-width:420px){.tracking-settings-modal{padding:20px}.tracking-font-controls{gap:4px}.tracking-font-controls .tracking-settings-trigger{min-width:32px}}
+@media(prefers-reduced-motion:reduce){.tracking-switch,.tracking-switch:after{transition:none}}
